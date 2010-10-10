@@ -2,12 +2,10 @@
 
 OPPVASP is a very simple Python post processing package for Ab Initio
 codes. Features in development:
-- Simple band structure parser for VASP and Quantum Espresso output
-- Band analyzer that checks for minima, maxima, bandwidth...
-- Band structure plotting using matplotlib 
 
-it supports plotting of band structures using
-Matplotlib with data from VASP or Quantum Espresso. 
+* Simple band structure parser for VASP and Quantum Espresso output
+* Band analyzer that checks for minima, maxima, bandwidth...
+* Band structure plotting using matplotlib 
 
 ### Installing
 
@@ -17,8 +15,9 @@ Requirements: matplotlib, scipy, scitools
 
 ### Usage
 
-    Add folder to PYTHONPATH
-    Examples are included in the examples folder
+Add folder to PYTHONPATH
+
+Examples are included in the examples folder
 
 ### Author
 
