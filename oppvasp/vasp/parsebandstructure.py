@@ -6,7 +6,7 @@
 
 import re,os,copy
 import numpy as np
-from abpytho.kpoint import KPoint
+from oppvasp.kpoint import KPoint
 
 class ParseBandStructure():
     '''

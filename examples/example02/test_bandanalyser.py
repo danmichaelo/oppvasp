@@ -5,9 +5,9 @@ Created on 22. mars 2010
 @author: danmichael
 '''
 
-import abpytho.vasp.parsebandstructure as vpb
-import abpytho.espresso.parsebandstructure as epb
-import abpytho.bandanalyser as ba
+import oppvasp.vasp.parsebandstructure as vpb
+import oppvasp.espresso.parsebandstructure as epb
+import oppvasp.bandanalyser as ba
 import unittest
 
 class TestBandAnalyser(unittest.TestCase):

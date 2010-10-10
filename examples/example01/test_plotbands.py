@@ -1,35 +1,31 @@
 '''
-Unit test for plotbands.py
 Created on 22. mars 2010
-
 @author: danmichael
 '''
 
-import abpytho.vasp.parsebandstructure as vpb
-import abpytho.espresso.parsebandstructure as epb
-import abpytho.plotbands as pb
-import unittest
+import oppvasp.vasp.parsebandstructure as vpb
+import oppvasp.espresso.parsebandstructure as epb
+import oppvasp.plotbands as pb
 
-class TestPlotBands(unittest.TestCase):
-    
-    def setUp(self):
-        self.plot = pb.PlotBands({ 'basis': 'reciprocal', 'points': [
-             ['\\Gamma', [1.0, 1.0,  1.0]],
-             ['X'      , [0.5, 0.5,  0.0]],
-             ['L'      , [0.5, 0.5,  0.5]],
-             ['W'      , [0.5, 0.75, 0.25]]
-         ]})
+plot = pb.PlotBands({ 'basis': 'reciprocal', 'points': [
+     ['\\Gamma', [1.0, 1.0,  1.0]],
+     ['X'      , [0.5, 0.5,  0.0]],
+     ['L'      , [0.5, 0.5,  0.5]],
+     ['W'      , [0.5, 0.75, 0.25]]
+ ]})
 
-    def tearDown(self):
-        #self.widget.dispose()
-        #self.widget = None
-        pass
+plot.addBands(
+    epb.ParseBandStructure('si.band','si.band.out'), 
+    fermiLevel = 6.54, color='blue', label='Espresso', linestyle='dashed'
+    )
 
-    def testPlotbands(self):
-        self.plot.addBands(epb.ParseBandStructure('si.band','si.band.out'), fermiLevel = 6.54, color='blue', label='Espresso', linestyle='dashed')
-        self.plot.addBands(vpb.ParseBandStructure('PROCAR','OUTCAR'), fermiLevel = 6.54, color='red', label='VASP')
-        self.plot.plotAndSaveToFile(outFile = 'bands.pdf', yMin = -13.0, yMax = 4.0, basis='cartesian')
+plot.addBands(
+    vpb.ParseBandStructure(), 
+    fermiLevel = 6.54, color='red', label='VASP'
+    )
 
+plot.plotAndSaveToFile(
+    outFile = 'bands.pdf', basis='cartesian',
+    yRange = [-13.0, 4.0], yTicks = [-13.0, 4.0, 1.0] 
+)
 
-if __name__ == "__main__":
-    unittest.main()
