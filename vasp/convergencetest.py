@@ -3,7 +3,7 @@
 #
 # @file convergencetest.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 16, 2010 21:30:38
+# Last modified: Nov 16, 2010 22:19:48
 #
 #############################################################################
 import os,shutil,sys,re,math
@@ -40,7 +40,7 @@ class ConvergenceTest:
         summaryfilename = 'summary.out'
         if not os.path.isfile(summaryfilename):  # does file exist?
             summaryfile = open(summaryfilename,'w')
-            summaryfile.write("Run #\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
+            summaryfile.write(self.param+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
             summaryfile.close()
 
         # Loop 
@@ -50,7 +50,7 @@ class ConvergenceTest:
             f = open('INCAR','r+'); fc = f.read()
             fcr = re.sub(
                 r'%s([ \t]*)=([ \t]*)([.\w]*)' % (self.param),
-                '%s\\1=\\2\x00%s' % (self.param,self.paramValues[stepNo]),
+                '%s\\1=\\2 %s' % (self.param,self.paramValues[stepNo]),
                 fc)
             if fc == fcr:
                 fcr = fc+"\n %s = %s\n" % (self.param,self.paramValues[stepNo])
@@ -63,7 +63,7 @@ class ConvergenceTest:
                 
                 # Run VASP:
                 os.chdir(self.workdir)
-                os.system(vaspcmd)
+                os.system(self.vaspcmd)
                 os.chdir(self.basedir)
                 
                 # Move files back
@@ -76,8 +76,8 @@ class ConvergenceTest:
             poscar = poscarParser('POSCAR')
             outcar = outcarParser('OUTCAR', poscar.selective)
 
-            summaryline = "%d\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
-                stepNo,
+            summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
+                self.paramValues[stepNo],
                 outcar.kpoints,
                 outcar.dist,
                 outcar.toten,
@@ -185,6 +185,17 @@ class poscarParser:
 class outcarParser:
 
     def __init__(self, outcarname = 'OUTCAR', selective = 0):
+
+        self.kpoints = 0
+        self.dist = 0
+        self.toten = 0
+        self.planewaves = 0
+        self.cpu = 0
+        self.memory = 0
+        self.maxforce = 0
+        self.maxdrift = 0
+        self.maxpressure = 0
+
         outfile = open(outcarname, 'r')
         while 1:
             line = outfile.readline()
