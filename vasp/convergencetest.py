@@ -2,26 +2,30 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
+<<<<<<< HEAD
 # Last modified: Nov 17, 2010 18:46:42
+=======
+# Last modified: Nov 17, 2010 18:50:31
+>>>>>>> 8246742f95274bbf2f1e6ac4ff3189c82d34bc6b
 #
-# Usage:
+# Example usage:
 #
-#    analyzeOnly = ('vaspcommand' not in os.environ)
-#    if analyzeOnly:
-#        print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
-#        basedir = os.path.curdir
-#        vaspcmd = "ls" #dummy
-#        workdir = '/dev/null' #dummy
-#    else:
-#        basedir = os.environ['SUBMITDIR']
-#        vaspcmd = os.environ['vaspcommand']
-#        workdir = os.environ['SCRATCH']
+#   import os
+#   from oppvasp.vasp.convergencetest import ConvergenceTest
+#
+#   analyzeOnly = ('vaspcommand' not in os.environ)
+#   if analyzeOnly:
+#      print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
+#      basedir = os.path.curdir
+#      vaspcmd = "ls" #dummy
+#      workdir = '/dev/null' #dummy
+#   else:
+#      basedir = os.environ['SUBMITDIR']
+#      vaspcmd = os.environ['vaspcommand']
+#      workdir = os.environ['SCRATCH']
 #
 #   job = ConvergenceTest(basedir,workdir,vaspcmd)
-#   job.summaryfile = 'summary.out'
-#   job.parameterfile = 'convergencetest.in' 
 #   job.start(analyzeOnly)
-#
 #
 #############################################################################
 import os,shutil,sys,re,math
