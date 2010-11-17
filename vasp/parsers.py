@@ -1,5 +1,7 @@
 # This file contains code originally written by olem
 
+import re, math
+
 from xml.dom.ext.reader import Sax2
 from xml import xpath
 

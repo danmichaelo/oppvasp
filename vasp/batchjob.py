@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 18:33:32
+# Last modified: Nov 17, 2010 18:48:04
 #
 #############################################################################
 import os,shutil,sys,re
@@ -20,11 +20,11 @@ class BatchJob:
     def addStep(self,step):
         self.steps.append(step)
     
-    def info():
+    def info(self):
         print "A total number of %d runs will be carried out." % (len(self.steps))
         print " Index\t Step info"
         for step in self.steps: 
-            print " %4d\t %s" % (step.index,self.steps[i])
+            print " %4d\t %s" % (step.index,step)
         print
 
     def start(self,analyzeOnly = False):
@@ -38,7 +38,7 @@ class BatchJob:
             sf.close()
 
         # (4) Go!
-        for step in steps:
+        for step in self.steps:
             
             if not analyzeOnly:
                 # Prepare for the current run
@@ -69,7 +69,7 @@ class BatchJob:
             outcar = outcarParser('OUTCAR.%d' % (step.index), poscar.selective)
 
             summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
-                self.paramValues[step.index],
+                step.getName(),
                 outcar.kpoints,
                 outcar.dist,
                 outcar.toten,
@@ -142,9 +142,16 @@ class ManualBatchStep:
     def __str__(self):
         return " ".join(self.files.values())
 
-    def prepareForRun(self):
+    def preProcess(self):
         # Make available the files for the current run
         for f in self.inp:
             os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
+
+    def postProcess(self):
+        pass
+
+    def getName():
+        return self.index
+
 
 

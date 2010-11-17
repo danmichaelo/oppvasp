@@ -2,7 +2,7 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 18:16:38
+# Last modified: Nov 17, 2010 18:46:42
 #
 # Usage:
 #
@@ -45,8 +45,8 @@ class ConvergenceTest(BatchJob):
         paramValues = [l.strip() for l in lines[1:]]
         
         # Add batch steps
-        for i in range(self.paramValues):
-            self.addStep(ConvergenceTestStep(i,param,paramValues[i]
+        for i in range(len(paramValues)):
+            self.addStep(ConvergenceTestStep(i,param,paramValues[i]))
        
         self.info()
 
@@ -72,4 +72,7 @@ class ConvergenceTestStep:
         pass
 
     def __str__(self):
-        return '%s=%s' & (self.param,self.paramValue)
+        return '%s=%s' % (self.param,self.paramValue)
+
+    def getName(self):
+        return self.paramValue
