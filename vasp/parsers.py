@@ -160,3 +160,12 @@ class outcarParser:
                 break
         outfile.close()
 
+    #def read_stress(self):
+    #    for line in open('OUTCAR'):
+    #        if line.find(' in kB  ') != -1:
+    #            stress = -np.array([float(a) for a in line.split()[2:]]) \
+    #                     [[0, 1, 2, 4, 5, 3]] \
+    #                     * 1e-1 * ase.units.GPa
+    #    return stress
+        
+

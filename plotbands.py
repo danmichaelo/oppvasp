@@ -27,7 +27,7 @@ rc('text', usetex=True)
 #import matplotlib
 
 
-from query_yes_no import query_yes_no
+from utils import query_yes_no
 
 class PlotBands():
     '''

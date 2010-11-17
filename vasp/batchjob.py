@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 18:48:04
+# Last modified: Nov 17, 2010 20:48:59
 #
 #############################################################################
 import os,shutil,sys,re
@@ -111,10 +111,7 @@ class ManualBatchStep:
         self.necessary = False
         for f in self.inp:
             self[f] = f
-            if os.path.exists(f) and os.path.exists(f+'.0'):
-                print "Both a file '%s' and a file '%s' exist. I'm terribly confused." % (f,f+'.0')
-                sys.exit(1)
-            elif os.path.exists(f+'.0'):
+            if os.path.exists(f+'.0'):
                 d = 0
                 while d <= index:
                     if os.path.exists('%s.%d' % (f,d)):
@@ -150,7 +147,7 @@ class ManualBatchStep:
     def postProcess(self):
         pass
 
-    def getName():
+    def getName(self):
         return self.index
 
 
