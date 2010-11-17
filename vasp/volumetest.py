@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 20:49:33
+# Last modified: Nov 17, 2010 21:18:47
 #
 # Example usage:
 #
@@ -24,7 +24,7 @@
 #   job.start(analyzeOnly)
 #
 #############################################################################
-import os
+import os,sys
 from batchjob import BatchJob, ManualBatchStep
 from oppvasp import utils
 
@@ -32,6 +32,7 @@ class VolumeTestCubicUnitCell(BatchJob):
 
     def __init__(self,basedir,workdir,vaspcmd):
         BatchJob.__init__(self,basedir,workdir,vaspcmd)
+        self.paramName = 'VOL' # summary file header
 
         # Read parameter input
         self.parameterfile = 'volumetest.in'
