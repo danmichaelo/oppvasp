@@ -2,8 +2,11 @@
 
 import re, math
 
-from xml.dom.ext.reader import Sax2
-from xml import xpath
+#from xml.dom.ext.reader import Sax2
+#from xml import xpath
+
+from lxml import etree
+
 
 class vasprunParser:
         
@@ -13,9 +16,14 @@ class vasprunParser:
         self.readXml(vasprun)
 
     def readXml(self,filename):
+        docstr = open(filename).read()
 
-        doc = Sax2.FromXmlFile(filename).documentElement
-        results = xpath.Evaluate( "/modeling/calculation/energy/i[@name='e_fr_energy']", doc)
+        # zap control characters that invalidates the xml
+        docstr = re.sub('[\x00-\x09\x0B-\x1F]','',docstr)
+
+        doc = etree.fromstring(docstr)
+        
+        results = doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
         if results:
             self.toten = float(results[0].firstChild.nodeValue)
         

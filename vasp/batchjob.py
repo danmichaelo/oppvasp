@@ -2,7 +2,26 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 20:48:59
+# Last modified: Nov 22, 2010 17:33:44
+#
+# Example usage:
+#
+#   import os
+#   from oppvasp.vasp.batchjob import ManualBatchJob 
+#
+#   analyzeOnly = ('vaspcommand' not in os.environ)
+#   if analyzeOnly:
+#       print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
+#       basedir = os.path.curdir
+#       vaspcmd = "ls" #dummy
+#       workdir = '/dev/null' #dummy
+#   else:
+#       basedir = os.environ['SUBMITDIR']
+#       vaspcmd = os.environ['vaspcommand']
+#       workdir = os.environ['SCRATCH']
+#
+#   job = ManualBatchJob(basedir,workdir,vaspcmd)
+#   job.start(analyzeOnly)
 #
 #############################################################################
 import os,shutil,sys,re

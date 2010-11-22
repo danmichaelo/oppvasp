@@ -1,5 +1,7 @@
 
-import math, sys
+import math, sys, os
+from lxml import etree
+
 
 # since we cannot rely on numpy being available, we
 # define a floating point range function
@@ -71,4 +73,25 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "\
                              "(or 'y' or 'n').\n")
+
+        sys.stdout.write("\nSaving band structure to %s... " % outFile)
+        sys.stdout.flush()
+        plt.savefig(outFile)
+        sys.stdout.write("done!\n\n")
+
+def OpenVaspRunXml():
+    filename = 'vasprun.xml'
+    if len(sys.argv) > 0:
+        filename = sys.argv[0]
+    filename = 'vasprun.xml'
+    if not os.path.isfile(filename):
+        print "\nERROR: File '%s' was not found!\n" % (filename)
+    fsize = float(os.path.getsize(filename))/1024**2
+    sys.stdout.write("Parsing %s (%.1f MB) using libxml... " % (filename, fsize))
+    if fsize > 100:
+        sys.stdout.write("\nThis may take some time... ")
+    sys.stdout.flush()
+    doc = etree.fromstring(open(filename,'r').read())
+    sys.stdout.write("done!\n")
+    return doc, filename
 
