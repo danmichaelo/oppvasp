@@ -35,6 +35,7 @@ class BatchJob:
         self.vaspcmd = vaspcmd
         self.summaryfile = 'summary.out'
         self.steps = []
+        self.paramName = 'Run' # summary file header
 
     def addStep(self,step):
         self.steps.append(step)
@@ -46,6 +47,7 @@ class BatchJob:
             print " %4d\t %s" % (step.index,step)
         print
 
+
     def start(self,analyzeOnly = False):
 
         os.chdir(self.basedir)
@@ -53,7 +55,7 @@ class BatchJob:
         # Initialize summary file
         if not os.path.isfile(self.summaryfile):
             sf = open(self.summaryfile,'w')
-            sf.write(self.param+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
+            sf.write(self.paramName+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
             sf.close()
 
         # (4) Go!
@@ -75,8 +77,8 @@ class BatchJob:
                 os.system('cp -Rupf %s/* %s/ ' % (self.workdir, self.basedir))
 
                 # Save some output files
-                os.rename('OUTCAR','OUTCAR.%d' % (self.index))
-                os.rename('vasprun.xml','vasprun.%d.xml' % (self.index))
+                os.rename('OUTCAR','OUTCAR.%d' % (step.index))
+                os.rename('vasprun.xml','vasprun.%d.xml' % (step.index))
                 
                 # May be used to save more files
                 step.postProcess()

@@ -3,9 +3,9 @@
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
 <<<<<<< HEAD
-# Last modified: Nov 17, 2010 18:46:42
+# Last modified: Nov 17, 2010 21:19:25
 =======
-# Last modified: Nov 17, 2010 18:50:31
+# Last modified: Nov 17, 2010 21:19:25
 >>>>>>> 8246742f95274bbf2f1e6ac4ff3189c82d34bc6b
 #
 # Example usage:
@@ -47,6 +47,7 @@ class ConvergenceTest(BatchJob):
         f.close()
         param = lines[0].strip() #trim
         paramValues = [l.strip() for l in lines[1:]]
+        self.paramName = param # summary file header
         
         # Add batch steps
         for i in range(len(paramValues)):
