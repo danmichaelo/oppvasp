@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 22, 2010 17:33:44
+# Last modified: Nov 22, 2010 22:21:10
 #
 # Example usage:
 #
@@ -77,8 +77,8 @@ class BatchJob:
                 os.system('cp -Rupf %s/* %s/ ' % (self.workdir, self.basedir))
 
                 # Save some output files
-                os.rename('OUTCAR','OUTCAR.%d' % (step.index))
-                os.rename('vasprun.xml','vasprun.%d.xml' % (step.index))
+                os.rename('OUTCAR',step['OUTCAR'])
+                os.rename('vasprun.xml',step['vasprun.xml'])
                 
                 # May be used to save more files
                 step.postProcess()
@@ -86,8 +86,12 @@ class BatchJob:
             # Analyze output and print results to summary file
 
             #vasprun = vasprunParser('vasprun.%d.xml' % (step.index))
-            poscar = poscarParser('POSCAR')
-            outcar = outcarParser('OUTCAR.%d' % (step.index), poscar.selective)
+            if not os.path.isfile(step['OUTCAR']):
+                print "No output file '%s' to analyze. Exciting..." % (step['OUTCAR'])
+                sys.exit(1)
+
+            poscar = poscarParser(step['POSCAR'])
+            outcar = outcarParser(step['OUTCAR'], poscar.selective)
 
             summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
                 step.getName(),
@@ -110,11 +114,10 @@ class ManualBatchJob(BatchJob):
     def __init__(self,basedir,workdir,vaspcmd):
         BatchJob.__init__(self,basedir,workdir,vaspcmd)
         
-        inp = ['INCAR','POSCAR','POTCAR','KPOINTS']
 
         # Set up the different steps. If e.g. INCAR.0, INCAR.1 and INCAR.2 are found, 3 steps will be set up.
         while True: # bad habit...
-            step = ManualBatchStep(inp,len(self.steps))
+            step = ManualBatchStep(len(self.steps))
             if step.necessary:
                 self.addStep(step)
             else:
@@ -122,15 +125,38 @@ class ManualBatchJob(BatchJob):
 
         self.info()
 
+class BatchStep:
 
-class ManualBatchStep:
-    
-    def __init__(self,inp,index):
-        self.files = {}
+    def __init__(self,index):
+
         self.index = index
-        self.inp = inp
+        self.inlist = ['INCAR','POSCAR','POTCAR','KPOINTS']
+        self.outlist = ['OUTCAR','vasprun.xml']
+        # Set default values
+        self.files = {}
+        for i in self.inlist:
+            self.files[i] = i
+        self.files['OUTCAR'] = 'OUTCAR.%d' % (self.index)
+        self.files['vasprun.xml'] = 'vasprun%d.xml' % (self.index)
+    
+    def __setitem__(self,key,val):
+        if not key in (self.inlist + self.outlist):
+            print "%s is not a valid input/output filename" % (key)
+            sys.exit(1)
+        self.files[key] = val
+
+    def __getitem__(self,key):
+        if not key in (self.inlist + self.outlist):
+            print "%s is not a valid input/output filename" % (key)
+            sys.exit(1)
+        return self.files[key]
+
+class ManualBatchStep(BatchStep):
+    
+    def __init__(self,index):
+        BatchStep.__init__(self,index)
         self.necessary = False
-        for f in self.inp:
+        for f in self.inlist:
             self[f] = f
             if os.path.exists(f+'.0'):
                 d = 0
@@ -145,24 +171,13 @@ class ManualBatchStep:
                 print "Neither a file '%s' nor a file '%s' was found. I'm terribly confused." % (f,f+'.0')
                 sys.exit(1)
 
-    def __setitem__(self,key,val):
-        if not key in self.inp:
-            print "%s is not a valid input/output filename" % (key)
-            sys.exit(1)
-        self.files[key] = val
-
-    def __getitem__(self,key):
-        if not key in self.inp:
-            print "%s is not a valid input/output filename" % (key)
-            sys.exit(1)
-        return self.files[key]
 
     def __str__(self):
         return " ".join(self.files.values())
 
     def preProcess(self):
         # Make available the files for the current run
-        for f in self.inp:
+        for f in self.inlist:
             os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
 
     def postProcess(self):

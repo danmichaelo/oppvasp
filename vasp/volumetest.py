@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 17, 2010 21:18:47
+# Last modified: Nov 22, 2010 22:13:55
 #
 # Example usage:
 #
@@ -58,14 +58,14 @@ class VolumeTestCubicUnitCell(BatchJob):
             ifile = open('POSCAR.%d' % (i), 'w')
             ifile.writelines(plines)
             ifile.close()
-            self.addStep(VolumeTestStep(['POSCAR'],i,paramValues[i]))
+            self.addStep(VolumeTestStep(i,paramValues[i]))
 
         self.info()
 
 class VolumeTestStep(ManualBatchStep):
     
-    def __init__(self,inp,index,paramValue):
-        ManualBatchStep.__init__(self,inp,index)
+    def __init__(self,index,paramValue):
+        ManualBatchStep.__init__(self,index)
         self.paramValue = paramValue
 
     def __str__(self):

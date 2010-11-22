@@ -3,9 +3,9 @@
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
 <<<<<<< HEAD
-# Last modified: Nov 17, 2010 21:19:25
+# Last modified: Nov 22, 2010 22:14:31
 =======
-# Last modified: Nov 17, 2010 21:19:25
+# Last modified: Nov 22, 2010 22:14:31
 >>>>>>> 8246742f95274bbf2f1e6ac4ff3189c82d34bc6b
 #
 # Example usage:
@@ -55,16 +55,16 @@ class ConvergenceTest(BatchJob):
        
         self.info()
 
-class ConvergenceTestStep:
+class ConvergenceTestStep(BatchStep):
 
     def __init__(self,index,param,paramValue):
-        self.index = index
+        BatchStep.__init__(self,index)
         self.param = param
         self.paramValue = paramValue
 
     def preProcess(self):
         # Update INCAR for the current run:
-        f = open('INCAR','r+'); fc = f.read()
+        f = open(self['INCAR'],'r+'); fc = f.read()
         fcr = re.sub(
             r'%s([ \t]*)=([ \t]*)([.\w]*)' % (self.param),
             '%s\\1=\\2 %s' % (self.param, self.paramValue),
