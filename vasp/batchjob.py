@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 22, 2010 22:21:10
+# Last modified: Nov 23, 2010 10:57:29
 #
 # Example usage:
 #
@@ -24,7 +24,7 @@
 #   job.start(analyzeOnly)
 #
 #############################################################################
-import os,shutil,sys,re
+import os,shutil,sys,re,datetime
 from parsers import poscarParser, outcarParser
 
 class BatchJob:
@@ -55,6 +55,8 @@ class BatchJob:
         # Initialize summary file
         if not os.path.isfile(self.summaryfile):
             sf = open(self.summaryfile,'w')
+            sf.write('# File: '+os.path.abspath(self.summaryfile)+'\n')
+            sf.write('# Created: '+datetime.datetime.today().strftime("%F %T")+'\n')
             sf.write(self.paramName+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
             sf.close()
 
