@@ -23,6 +23,18 @@ class vasprunParser:
 
         self.doc = etree.fromstring(docstr)
     
+    def getIncarProperty(self, propname):
+        """ 
+        Get value of INCAR property.
+        Example: getIncarProperty('ENCUT')
+        Returns a string or raises a LookupError
+        """
+        results = self.doc.xpath( "/modeling/incar/i[@name='"+propname+"']")
+        if results:
+            return results[0].text
+        else:
+            raise LookupError('Value not found')
+    
     def getTotalEnergy(self):
         results = self.doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
         if results:

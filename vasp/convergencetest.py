@@ -2,11 +2,7 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
-<<<<<<< HEAD
-# Last modified: Nov 22, 2010 22:14:31
-=======
-# Last modified: Nov 22, 2010 22:14:31
->>>>>>> 8246742f95274bbf2f1e6ac4ff3189c82d34bc6b
+# Last modified: Nov 26, 2010 19:24:56
 #
 # Example usage:
 #
@@ -33,11 +29,11 @@ from batchjob import BatchJob
 
 class ConvergenceTest(BatchJob):
 
-    def __init__(self,basedir,workdir,vaspcmd):
+    def __init__(self,basedir,workdir,vaspcmd, parameterfile = 'convergencetest.in'):
         BatchJob.__init__(self,basedir,workdir,vaspcmd)
         
         # Read parameter input
-        self.parameterfile = 'convergencetest.in'
+        self.parameterfile = parameterfile 
         os.chdir(self.basedir)
         if not os.path.isfile(self.parameterfile):
             print "Parameter-file '%s' not found!" % (self.parameterfile)

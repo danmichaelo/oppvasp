@@ -2,7 +2,7 @@
 #
 # @file ktest.py @version 4
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 23, 2010 11:51:03
+# Last modified: Nov 26, 2010 19:20:17
 #
 # Example usage:
 #
@@ -24,7 +24,7 @@
 #   job.start(analyzeOnly)
 #
 #############################################################################
-import os,sys
+import os,sys,re
 from batchjob import BatchJob, ManualBatchStep
 from oppvasp import utils
 
@@ -43,22 +43,23 @@ class KTest(BatchJob):
         f = open(self.parameterfile,'r')
         lines = f.readlines()
         f.close()
-        aMin = float(lines[0].strip())
-        aMax = float(lines[1].strip())
-        aStep = float(lines[2].strip())
-
-        paramValues = list(utils.frange6(aMin,aMax,aStep))
-         
-        POSCAR = open('POSCAR', 'r')
-        plines = POSCAR.readlines()
-        POSCAR.close()
+        ktype = lines[0]
+        paramValues = []
+        for l in lines[1:]:
+            m = re.match('^[ \t]*([0-9])?[ \t]*([0-9])?[ \t]*([0-9])?', l)
+            if m:
+                paramValues.append(m.group(0))
+        
+        KPOINTS= open('KPOINTS', 'r')
+        plines = KPOINTS.readlines()
+        KPOINTS.close()
 
         for i in range(len(paramValues)):
-            plines[1] = '%.4f\n' % (paramValues[i])
-            ifile = open('POSCAR.%d' % (i), 'w')
+            plines[3] = paramValues[i] + '\n'
+            ifile = open('KPOINTS.%d' % (i), 'w')
             ifile.writelines(plines)
             ifile.close()
-            self.addStep(VolumeTestStep(i,paramValues[i]))
+            self.addStep(KTestStep(i,paramValues[i]))
 
         self.info()
 
@@ -69,8 +70,8 @@ class KTestStep(ManualBatchStep):
         self.paramValue = paramValue
 
     def __str__(self):
-        return "a = %.3f" % (self.paramValue)
+        return "K = %s" % (self.paramValue)
     
     def getName(self):
-        return "%.3f" % (self.paramValue)
+        return "%s" % (self.paramValue)
 
