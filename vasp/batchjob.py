@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 23, 2010 10:57:29
+# Last modified: Nov 26, 2010 16:24:13
 #
 # Example usage:
 #
@@ -41,14 +41,14 @@ class BatchJob:
         self.steps.append(step)
     
     def info(self):
-        print "A total number of %d runs will be carried out." % (len(self.steps))
+        print "Total number of runs: %d " % (len(self.steps))
         print " Index\t Step info"
         for step in self.steps: 
             print " %4d\t %s" % (step.index,step)
         print
 
 
-    def start(self,analyzeOnly = False):
+    def start(self, analyzeOnly = False, firstStep = 0):
 
         os.chdir(self.basedir)
 
@@ -62,8 +62,9 @@ class BatchJob:
 
         # (4) Go!
         for step in self.steps:
+
             
-            if not analyzeOnly:
+            if (not analyzeOnly) and (step.index >= firstStep):
                 # Prepare for the current run
                 step.preProcess()
                 

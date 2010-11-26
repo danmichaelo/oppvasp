@@ -21,13 +21,23 @@ class vasprunParser:
         # zap control characters that invalidates the xml
         docstr = re.sub('[\x00-\x09\x0B-\x1F]','',docstr)
 
-        doc = etree.fromstring(docstr)
-        
-        results = doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
+        self.doc = etree.fromstring(docstr)
+    
+    def getTotalEnergy(self):
+        results = self.doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
         if results:
-            self.toten = float(results[0].firstChild.nodeValue)
-        
-        print '%.6f' % (self.toten)
+            return float(results[0].text)
+        else:
+            raise LookupError('Value not found')
+    
+    # final volume in [Bohr**3]
+    def getFinalVolume(self):
+        results = self.doc.xpath( "/modeling/structure[@name='finalpos']/crystal/i[@name='volume']")
+        if results:
+            return float(results[0].text)
+        else:
+            raise LookupError('Value not found')
+
 
 
 class poscarParser:
