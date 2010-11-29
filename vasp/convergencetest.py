@@ -2,7 +2,7 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 26, 2010 19:24:56
+# Last modified: Nov 29, 2010 12:12:58
 #
 # Example usage:
 #
@@ -25,7 +25,7 @@
 #
 #############################################################################
 import os,shutil,sys,re,math
-from batchjob import BatchJob
+from batchjob import BatchJob, BatchStep
 
 class ConvergenceTest(BatchJob):
 

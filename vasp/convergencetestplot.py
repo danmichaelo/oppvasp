@@ -2,7 +2,7 @@
 # vim:fenc=utf-8:et:sw=4:ts=4:sts=4:tw=0
 #
 # @created: Nov 14, 2010 21:06:06 
-# Last modified: Nov 26, 2010 19:41:00
+# Last modified: Nov 29, 2010 12:52:02
 
 import os,copy,sys
 import matplotlib
@@ -16,7 +16,7 @@ import glob # for finding files using wildcards
 from oppvasp.utils import query_yes_no
 from oppvasp.vasp.parsers import vasprunParser
 import oppvasp.plotting
-
+__docformat__ = "restructuredtext en"
 
 class ConvergenceTestPlot:
     """
@@ -24,6 +24,14 @@ class ConvergenceTestPlot:
     with the filename pattern 'vasprun*.xml'. A numpy array is created
     that holds the convergence parameter and the total energy from all the xml files.
     The array is sorted on volume and then plotted usign matplotlib.
+
+    Example usage:
+
+    >>> plot = ConvergenceTestPlot(parameter = 'ENCUT')
+    >>> plot.setXLabel('$E$')
+    >>> plot.plot('out.pdf')
+    >>> plot.exportCSV('out.csv')
+    
     """
 
     def __init__(self, parameter = 'ENCUT', width = 350., normalfontsize = 10, smallfontsize = 8, linewidth = 0.5, plotmargins = [0.125, 0.15, 0.05, 0.05]):
@@ -107,4 +115,18 @@ class ConvergenceTestPlot:
         sys.stdout.write("done!\n\n")
 
         #return min_pt, cs_min_pt
-    
+
+    def exportCSV(self, filename = 'convergencetestplot.csv'):
+        """
+        Exports the internal x,y numpy array as a .csv file, 
+        that can be imported into Excel or what have you.
+        """
+        sys.stdout.write("\nSaving table to %s... " % filename)
+        sys.stdout.flush()
+        f = open(filename,'w')
+        for i in range(xy.shape[1]):
+            f.write('%.6f,%.6f\n' % (xy[0,i],xy[1,i]))
+        f.close()
+        sys.stdout.write("done!\n\n")
+
+

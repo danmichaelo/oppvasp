@@ -209,15 +209,15 @@ class ParseBandStructure():
 
         Example of what we are looking for:
 
-          LATTYP: Found a face centered cubic cell.
-         ALAT       =     5.3893600000
+        LATTYP: Found a face centered cubic cell.
+        ALAT       =     5.3893600000
          
-         [...]
+        [...]
 
-          direct lattice vectors                 reciprocal lattice vectors
-         0.000000000  2.694680000  2.694680000    -0.185550789  0.185550789  0.185550789
-         2.694680000  0.000000000  2.694680000     0.185550789 -0.185550789  0.185550789
-         2.694680000  2.694680000  0.000000000     0.185550789  0.185550789 -0.185550789
+        direct lattice vectors                 reciprocal lattice vectors
+        0.000000000  2.694680000  2.694680000    -0.185550789  0.185550789  0.185550789
+        2.694680000  0.000000000  2.694680000     0.185550789 -0.185550789  0.185550789
+        2.694680000  2.694680000  0.000000000     0.185550789  0.185550789 -0.185550789
         """
         alatMatcher = re.compile("\s*ALAT\s*=\s*([.\d]+)")
         axesHeaderMatcher = re.compile("\s*direct lattice vectors\s+reciprocal lattice vectors")
