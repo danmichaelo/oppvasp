@@ -2,7 +2,7 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Dec 04, 2010 22:58:00
+# Last modified: Dec 06, 2010 12:44:24
 #
 # Example usage:
 #
@@ -34,8 +34,8 @@ __docformat__ = "restructuredtext en"
 
 class ConvergenceTest(BatchJob):
 
-    def __init__(self,basedir,workdir,vaspcmd, parameterfile = 'convergencetest.in'):
-        BatchJob.__init__(self,basedir,workdir,vaspcmd)
+    def __init__(self,basedir,workdir,vaspcmd, parameterfile = 'convergencetest.in', distributecmd = 'cp -Rupf'):
+        BatchJob.__init__(self,basedir,workdir,vaspcmd,distributecmd)
         
         # Read parameter input
         self.parameterfile = parameterfile 
