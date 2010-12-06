@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 26, 2010 16:24:13
+# Last modified: Dec 04, 2010 01:08:56
 #
 # Example usage:
 #
@@ -29,10 +29,11 @@ from parsers import poscarParser, outcarParser
 
 class BatchJob:
 
-    def __init__(self,basedir,workdir,vaspcmd):
+    def __init__(self,basedir,workdir,vaspcmd,distributecmd = "cp -Ruf"):
         self.basedir = basedir
         self.workdir = workdir
         self.vaspcmd = vaspcmd
+        self.distributecmd = distributecmd
         self.summaryfile = 'summary.out'
         self.steps = []
         self.paramName = 'Run' # summary file header
@@ -69,7 +70,7 @@ class BatchJob:
                 step.preProcess()
                 
                 # (Re-)Distribute files to all nodes:
-                os.system("srun --ntasks=$SLURM_JOB_NUM_NODES cp -Rupf %s/* %s/" % (self.basedir, self.workdir))
+                os.system("%s %s/* %s/" % (self.distributecmd,self.basedir, self.workdir))
                 
                 # Run VASP:
                 os.chdir(self.workdir)
