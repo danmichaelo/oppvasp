@@ -2,18 +2,7 @@
 # vim:fenc=utf-8:et:sw=4:ts=4:sts=4:tw=0
 #
 # @created: Nov 14, 2010 21:06:06 
-# Last modified: Nov 26, 2010 15:44:53
-# @author: danmichael
-#
-# This class parses all vasprun.xml files in the current directory 
-# with the filename pattern 'vasprun*.xml'. A numpy array is created
-# that holds the cell volume and total energy from all the xml files.
-# The array is sorted on volume and then plotted usign matplotlib.
-#
-# Example usage:
-#
-#
-#
+# Last modified: Nov 29, 2010 16:26:06
 
 import os,copy,sys
 import matplotlib
@@ -27,6 +16,7 @@ from matplotlib import rc
 import glob # for finding files using wildcards
 from oppvasp.utils import query_yes_no
 from oppvasp.vasp.parsers import vasprunParser
+__docformat__ = "restructuredtext en"
 
 
 # Tip: Use \showthe\columnwidth to get column width
@@ -54,6 +44,30 @@ def prepareCanvas(fig_width_pt = 350.0, s1 = 10, s2 = 8, lw = 0.5, plotmargins =
 
 
 class VolumeTestPlot:
+    """
+    This class parses all vasprun.xml files in the current directory 
+    with the filename pattern 'vasprun*.xml'. A numpy array is created
+    that holds the cell volume and total energy from all the xml files.
+    The array is sorted on volume and then plotted usign matplotlib.
+    
+    Example usage:
+
+    >>> from oppvasp.vasp.volumetestplot import VolumeTestPlot
+    >>> plot = VolumeTestPlot()
+    >>> plot.xy[0,:] **= (1./3) * 0.5291    # ... volume -> lattice parameter (cubic cell) in Angstrom
+    >>> plot.xy[1,:] /= 8.                  # ... to get the energy per unit cell (from 2x2x2)
+    >>> plot.setXlabel('Lattice parameter/cell [\AA]')
+    >>> plot.setYlabel('Energy/cell [eV]')
+    >>> min_pt, cs_min_pt = plot.plot()
+    >>> 
+    >>> print "------------------------------------------------"
+    >>> print "Minimum      \ta [Ang]\t\tEnergy/cell"
+    >>> print "------------------------------------------------"
+    >>> print "Sampled      \t%.6f\t\t%.4f" % (min_pt[0],min_pt[1])
+    >>> print "Interpolated \t%.6f\t\t%.4f" % (cs_min_pt[0],cs_min_pt[1])
+    >>> print 
+
+    """
 
     def __init__(self, width = 350., normalfontsize = 10, smallfontsize = 8, linewidth = 0.5, plotmargins = [0.125, 0.15, 0.05, 0.05]):
         
@@ -68,6 +82,8 @@ class VolumeTestPlot:
         #
         xmlFiles = glob.glob('vasprun*.xml')
         print "Found %d files matching 'vasprun*.xml'" % (len(xmlFiles))
+        if len(xmlFiles) == 0:
+            sys.exit(1)
         self.xy = np.zeros((2,len(xmlFiles)))
         for i in range(len(xmlFiles)):
             p = vasprunParser(xmlFiles[i])
@@ -136,4 +152,18 @@ class VolumeTestPlot:
         sys.stdout.write("done!\n\n")
 
         return min_pt, cs_min_pt
+
+    def exportCSV(self, filename = 'volumetestplot.csv'):
+        """
+        Exports the internal x,y numpy array as a .csv file, 
+        that can be imported into Excel or what have you.
+        """
+        sys.stdout.write("\nSaving table to %s... " % filename)
+        sys.stdout.flush()
+        f = open(filename,'w')
+        for i in range(self.xy.shape[1]):
+            f.write('%.6f\t%.6f\n' % (self.xy[0,i], self.xy[1,i]))
+        f.close()
+        sys.stdout.write("done!\n\n")
+
     

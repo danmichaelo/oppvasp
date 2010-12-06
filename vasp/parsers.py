@@ -1,12 +1,12 @@
 # This file contains code originally written by olem
 
-import re, math
+import sys,re, math
 
 #from xml.dom.ext.reader import Sax2
 #from xml import xpath
 
 from lxml import etree
-
+from StringIO import StringIO
 
 class vasprunParser:
         
@@ -21,7 +21,15 @@ class vasprunParser:
         # zap control characters that invalidates the xml
         docstr = re.sub('[\x00-\x09\x0B-\x1F]','',docstr)
 
-        self.doc = etree.fromstring(docstr)
+        parser = etree.XMLParser()
+        try:
+            self.doc = etree.parse(StringIO(docstr), parser)
+#            self.doc = etree.fromstring(docstr)
+        except etree.XMLSyntaxError:
+            print "Failed to parse xml file: ",filename
+            error = parser.error_log[0]
+            print(error.message)
+            sys.exit(2)
     
     def getIncarProperty(self, propname):
         """ 
@@ -49,6 +57,18 @@ class vasprunParser:
             return float(results[0].text)
         else:
             raise LookupError('Value not found')
+
+    def getSCsteps(self):
+        results = self.doc.xpath( "/modeling/calculation/scstep")
+        if results:
+            return results
+        else:
+            raise LookupError('Value not found')
+
+    def getCPUtime(self):
+        k
+
+
 
 
 
@@ -189,6 +209,9 @@ class outcarParser:
             if not line:
                 break
         outfile.close()
+
+    def getCPUTime(self):
+        return self.cpu
 
     #def read_stress(self):
     #    for line in open('OUTCAR'):

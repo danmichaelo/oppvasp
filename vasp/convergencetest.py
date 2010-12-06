@@ -2,7 +2,7 @@
 #
 # @file convergencetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 29, 2010 12:12:58
+# Last modified: Dec 04, 2010 22:58:00
 #
 # Example usage:
 #
@@ -26,6 +26,11 @@
 #############################################################################
 import os,shutil,sys,re,math
 from batchjob import BatchJob, BatchStep
+import numpy as np
+import glob # for finding files using wildcards
+from oppvasp.utils import query_yes_no
+from oppvasp.vasp.parsers import vasprunParser
+__docformat__ = "restructuredtext en"
 
 class ConvergenceTest(BatchJob):
 
@@ -77,3 +82,71 @@ class ConvergenceTestStep(BatchStep):
 
     def getName(self):
         return self.paramValue
+
+class ConvergenceTestData():
+    """
+    This class parses all vasprun.xml files in the current directory 
+    with the filename pattern 'vasprun*.xml'. A numpy array is created
+    that holds the convergence parameter and the total energy from all the xml files.
+    The array is sorted on volume and can be plotted using the GenericPlot class  
+    or exported as CSV.
+
+    Example usage:
+
+    >>> data = ConvergenceTestData(parameter = 'ENCUT')
+    >>> plot = GenericPlot('')
+    >>> plot.addData(data)
+    >>> plot.setXLabel('$E$')
+    >>> plot.plot('out.pdf')
+    >>> data.exportCSV('out.csv')
+    
+    """
+
+    def __init__(self, directory = '', parameter = 'ENCUT'):
+
+        #
+        # Find and parse vasprun xml-files:
+        #
+        xmlFiles = glob.glob(directory+'vasprun*.xml')
+        print "Found %d files matching 'vasprun*.xml'" % (len(xmlFiles))
+        xy = np.zeros((2,len(xmlFiles)))
+        for i in range(len(xmlFiles)):
+            p = vasprunParser(xmlFiles[i])
+            xy[0,i] = p.getIncarProperty(parameter)
+            xy[1,i] = p.getTotalEnergy()
+
+
+        #
+        # Sort self.xy by increasing parameter value 
+        #
+        idx = np.argsort(xy[0])
+        xy = np.array([[xy[j,i] for i in idx] for j in [0,1]])
+        
+        #
+        # Print to screen
+        #
+        print "------------------------------------------------"
+        print "File\t\t"+parameter+"\t\tEnergy"
+        print "------------------------------------------------"
+        for i in range(xy.shape[1]):
+            print "%s\t%.2f\t\t%.4f" % (xmlFiles[idx[i]],xy[0,i],xy[1,i])
+        print 
+
+        self.xy = xy
+
+    def exportCSV(self, filename = 'convergencetestplot.csv'):
+        """
+        Exports the internal x,y numpy array as a .csv file, 
+        that can be imported into Excel or what have you.
+        """
+        sys.stdout.write("\nSaving table to %s... " % filename)
+        sys.stdout.flush()
+        f = open(filename,'w')
+        for i in range(self.xy.shape[1]):
+            f.write('%.6f\t%.6f\n' % (self.xy[0,i],self.xy[1,i]))
+        f.close()
+        sys.stdout.write("done!\n\n")
+
+    def getData(self):
+        return self.xy
+
