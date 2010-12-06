@@ -67,7 +67,7 @@ class BatchJob:
             
             if (not analyzeOnly) and (step.index >= firstStep):
                 # Prepare for the current run
-                step.preProcess()
+                step.preprocess()
                 
                 # (Re-)Distribute files to all nodes:
                 os.system("%s %s/* %s/" % (self.distributecmd,self.basedir, self.workdir))
@@ -85,7 +85,7 @@ class BatchJob:
                 os.rename('vasprun.xml',step['vasprun.xml'])
                 
                 # May be used to save more files
-                step.postProcess()
+                step.postprocess()
 
             # Analyze output and print results to summary file
 
@@ -98,7 +98,7 @@ class BatchJob:
             outcar = outcarParser(step['OUTCAR'], poscar.selective)
 
             summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
-                step.getName(),
+                step.get_name(),
                 outcar.kpoints,
                 outcar.dist,
                 outcar.toten,
@@ -179,15 +179,15 @@ class ManualBatchStep(BatchStep):
     def __str__(self):
         return " ".join(self.files.values())
 
-    def preProcess(self):
+    def preprocess(self):
         # Make available the files for the current run
         for f in self.inlist:
             os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
 
-    def postProcess(self):
+    def postprocess(self):
         pass
 
-    def getName(self):
+    def get_name(self):
         return self.index
 
 

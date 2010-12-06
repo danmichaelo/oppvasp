@@ -9,13 +9,12 @@ from lxml import etree
 from StringIO import StringIO
 
 class vasprunParser:
-        
+    """
+    Parser for vasprun.xml files, making use of libxml for relatively fast parsing.
+    """
     
-    def __init__(self,vasprun='vasprun.xml'):
+    def __init__(self, filename = 'vasprun.xml'):
 
-        self.readXml(vasprun)
-
-    def readXml(self,filename):
         docstr = open(filename).read()
 
         # zap control characters that invalidates the xml
@@ -24,7 +23,6 @@ class vasprunParser:
         parser = etree.XMLParser()
         try:
             self.doc = etree.parse(StringIO(docstr), parser)
-#            self.doc = etree.fromstring(docstr)
         except etree.XMLSyntaxError:
             print "Failed to parse xml file: ",filename
             error = parser.error_log[0]
@@ -33,9 +31,10 @@ class vasprunParser:
     
     def getIncarProperty(self, propname):
         """ 
-        Get value of INCAR property.
-        Example: getIncarProperty('ENCUT')
-        Returns a string or raises a LookupError
+        Returns the value of a given INCAR property as a string,
+        or throws a LookupError if the property was not found.
+        Example: 
+        >>> getIncarProperty('ENCUT')
         """
         results = self.doc.xpath( "/modeling/incar/i[@name='"+propname+"']")
         if results:
@@ -44,14 +43,19 @@ class vasprunParser:
             raise LookupError('Value not found')
     
     def getTotalEnergy(self):
+        """
+        Returns the total energy in electronvolt
+        """
         results = self.doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
         if results:
             return float(results[0].text)
         else:
             raise LookupError('Value not found')
     
-    # final volume in [Bohr**3]
     def getFinalVolume(self):
+        """
+        Returns the final volume in units Angstrom^3
+        """
         results = self.doc.xpath( "/modeling/structure[@name='finalpos']/crystal/i[@name='volume']")
         if results:
             return float(results[0].text)
@@ -59,20 +63,21 @@ class vasprunParser:
             raise LookupError('Value not found')
 
     def getSCsteps(self):
+        """
+        Returns array of electronic self-consistent steps
+        """
         results = self.doc.xpath( "/modeling/calculation/scstep")
         if results:
             return results
         else:
             raise LookupError('Value not found')
 
-    def getCPUtime(self):
-        k
-
-
-
 
 
 class poscarParser:
+    """
+    Parser for POSCAR files
+    """
     
     def __init__(self, poscarname='POSCAR'):
         self.selective = 0 
@@ -116,8 +121,26 @@ class poscarParser:
         poscarfile.close()
 
 class outcarParser:
+    """
+    Parser for OUTCAR files
+    """
+
+    def getIncarProperty(self, propname):
+        outfile = open(self.filename, 'r')
+        lines = outfile.readlines()
+        s = re.compile('[\t ]*'+propname+'[\t ]*=[\t ]*([0-9.]*)')
+        for l in lines:
+            res = s.match(l)
+            if res:
+                return res.group(1)
+
+        print "Failed to lookup INCAR property "+propname+" in "+self.filename
+        sys.exit(1)
+
 
     def __init__(self, outcarname = 'OUTCAR', selective = 0):
+
+        self.filename = outcarname
 
         self.kpoints = 0
         self.dist = 0
@@ -209,6 +232,9 @@ class outcarParser:
             if not line:
                 break
         outfile.close()
+
+    def getTotalEnergy(self):
+        return self.toten
 
     def getCPUTime(self):
         return self.cpu

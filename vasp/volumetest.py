@@ -71,6 +71,6 @@ class VolumeTestStep(ManualBatchStep):
     def __str__(self):
         return "a = %.3f" % (self.paramValue)
     
-    def getName(self):
+    def get_name(self):
         return "%.3f" % (self.paramValue)
 

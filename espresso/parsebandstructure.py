@@ -75,13 +75,13 @@ class ParseBandStructure():
         This function will parse the std out file from a pw.x band calculation run,
         in order to find the definitions of the direct and reciprocal lattice vectors. 
 
-        Example of what we are looking for:
+        Example of what we are looking for::
         
               crystal axes: (cart. coord. in units of a_0)
                         a(1) = (  0.000000  0.500000  0.500000 )  
                         a(2) = (  0.500000  0.000000  0.500000 )  
                         a(3) = (  0.500000  0.500000  0.000000 ) 
-         
+
               reciprocal axes: (cart. coord. in units 2 pi/a_0)
                         b(1) = ( -1.000000  1.000000  1.000000 )  
                         b(2) = (  1.000000 -1.000000  1.000000 )  

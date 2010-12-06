@@ -72,6 +72,6 @@ class KTestStep(ManualBatchStep):
     def __str__(self):
         return "K = %s" % (self.paramValue)
     
-    def getName(self):
+    def get_name(self):
         return "%s" % (self.paramValue)
 

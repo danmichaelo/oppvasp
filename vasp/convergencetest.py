@@ -1,38 +1,31 @@
-#############################################################################
-#
-# @file convergencetest.py @version 3
-# This file should be called by <jobfile.sh>
-# Last modified: Dec 06, 2010 12:44:24
-#
-# Example usage:
-#
-#   import os
-#   from oppvasp.vasp.convergencetest import ConvergenceTest
-#
-#   analyzeOnly = ('vaspcommand' not in os.environ)
-#   if analyzeOnly:
-#      print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
-#      basedir = os.path.curdir
-#      vaspcmd = "ls" #dummy
-#      workdir = '/dev/null' #dummy
-#   else:
-#      basedir = os.environ['SUBMITDIR']
-#      vaspcmd = os.environ['vaspcommand']
-#      workdir = os.environ['SCRATCH']
-#
-#   job = ConvergenceTest(basedir,workdir,vaspcmd)
-#   job.start(analyzeOnly)
-#
-#############################################################################
 import os,shutil,sys,re,math
 from batchjob import BatchJob, BatchStep
 import numpy as np
 import glob # for finding files using wildcards
 from oppvasp.utils import query_yes_no
-from oppvasp.vasp.parsers import vasprunParser
+from oppvasp.vasp.parsers import vasprunParser, outcarParser
 __docformat__ = "restructuredtext en"
 
 class ConvergenceTest(BatchJob):
+    """
+    Example usage:
+
+    >>> import os
+    >>> from oppvasp.vasp.convergencetest import ConvergenceTest
+    >>>
+    >>> analyzeOnly = ('vaspcommand' not in os.environ)
+    >>> if analyzeOnly:
+    >>>     print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
+    >>>     basedir = os.path.curdir
+    >>>     vaspcmd = "ls" #dummy
+    >>>     workdir = '/dev/null' #dummy
+    >>> else:
+    >>>     basedir = os.environ['SUBMITDIR']
+    >>>     vaspcmd = os.environ['vaspcommand']
+    >>>     workdir = os.environ['SCRATCH']
+    >>>
+    >>> job.start(analyzeOnly)
+    """
 
     def __init__(self,basedir,workdir,vaspcmd, parameterfile = 'convergencetest.in', distributecmd = 'cp -Rupf'):
         BatchJob.__init__(self,basedir,workdir,vaspcmd,distributecmd)
@@ -63,8 +56,8 @@ class ConvergenceTestStep(BatchStep):
         self.param = param
         self.paramValue = paramValue
 
-    def preProcess(self):
-        # Update INCAR for the current run:
+    def preprocess(self):
+        """Updates INCAR for the current run"""
         f = open(self['INCAR'],'r+'); fc = f.read()
         fcr = re.sub(
             r'%s([ \t]*)=([ \t]*)([.\w]*)' % (self.param),
@@ -74,20 +67,19 @@ class ConvergenceTestStep(BatchStep):
             fcr = fc+"\n %s = %s\n" % (self.param,self.paramValue)
         f.seek(0); f.write(fcr); f.truncate(); f.close();
 
-    def postProcess(self):
+    def postprocess(self):
         pass
 
     def __str__(self):
         return '%s=%s' % (self.param,self.paramValue)
 
-    def getName(self):
+    def get_name(self):
         return self.paramValue
 
 class ConvergenceTestData():
     """
-    This class parses all vasprun.xml files in the current directory 
-    with the filename pattern 'vasprun*.xml'. A numpy array is created
-    that holds the convergence parameter and the total energy from all the xml files.
+    This class will scan a directory for vasprun.xml or OUTCAR files and generate
+    an numpy array holding the convergence parameter and the total energy from all the files.
     The array is sorted on volume and can be plotted using the GenericPlot class  
     or exported as CSV.
 
@@ -102,37 +94,75 @@ class ConvergenceTestData():
     
     """
 
-    def __init__(self, directory = '', parameter = 'ENCUT'):
+    outcarPattern = 'OUTCAR*'
+    vasprunPattern = 'vasprun*.xml'
 
-        #
-        # Find and parse vasprun xml-files:
-        #
-        xmlFiles = glob.glob(directory+'vasprun*.xml')
-        print "Found %d files matching 'vasprun*.xml'" % (len(xmlFiles))
-        xy = np.zeros((2,len(xmlFiles)))
-        for i in range(len(xmlFiles)):
-            p = vasprunParser(xmlFiles[i])
-            xy[0,i] = p.getIncarProperty(parameter)
-            xy[1,i] = p.getTotalEnergy()
+    def __init__(self, directory = '', parameter = 'ENCUT', verbose = False, useVasprunXML = False):
+        """
+        :Parameters:
+            directory : string
+                directory to look for files in
+            parameter : string
+                INCAR parameter to look for (default is 'ENCUT')
+            verbose : bool
+                Print info about each step to screen 
+            useVasprunXML : bool
+                True to scan for vasprun.xml files, False to scan for OUTCAR files. 
+        """
+        self.directory = directory
+        self.parameter = parameter
+        self.verbose = verbose
 
-
-        #
-        # Sort self.xy by increasing parameter value 
-        #
-        idx = np.argsort(xy[0])
-        xy = np.array([[xy[j,i] for i in idx] for j in [0,1]])
+        if useVasprunXML:
+            self.readXMLfiles()
+        else:
+            self.readOUTCARfiles()
         
-        #
-        # Print to screen
-        #
-        print "------------------------------------------------"
-        print "File\t\t"+parameter+"\t\tEnergy"
-        print "------------------------------------------------"
-        for i in range(xy.shape[1]):
-            print "%s\t%.2f\t\t%.4f" % (xmlFiles[idx[i]],xy[0,i],xy[1,i])
-        print 
+        # Sort self.xy and self.cpu by increasing parameter value 
+        idx = np.argsort(self.xy[0])
+        self.xy = np.array([[self.xy[j,i] for i in idx] for j in [0,1]])
+        if hasattr(self,'cpu'):
+            self.cpu = np.array([self.cpu[i] for i in idx])
 
-        self.xy = xy
+        if verbose:
+            print "------------------------------------------------"
+            print "File\t\t"+parameter+"\t\tEnergy\t\tCPU"
+            print "------------------------------------------------"
+            for i in range(self.xy.shape[1]):
+                if cpu in self:
+                    print "%s\t%.2f\t\t%.4f\t\t%.f" % (xmlFiles[idx[i]],self.xy[0,i],self.xy[1,i],self.cpu[i])
+                else:
+                    print "%s\t%.2f\t\t%.4f\t\t-" % (xmlFiles[idx[i]],self.xy[0,i],self.xy[1,i])
+            print 
+
+
+    def readOUTCARfiles(self):
+        """
+        Finds and parses OUTCAR files 
+        using the pattern defined in `ConvergenceTestData.outcarPattern`
+        """
+        files = glob.glob(self.directory + ConvergenceTestData.outcarPattern)
+        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.outcarPattern )
+        self.xy = np.zeros((2,len(files)))
+        self.cpu = np.zeros((len(files)))
+        for i in range(len(files)):
+            p = outcarParser(files[i])
+            self.xy[0,i] = p.getIncarProperty(self.parameter)
+            self.xy[1,i] = p.getTotalEnergy()
+            self.cpu[i] = p.getCPUTime()
+
+    def readXMLfiles(self):
+        """
+        Finds and parses OUTCAR files 
+        using the pattern defined in `ConvergenceTestData.vasprunPattern`
+        """
+        files = glob.glob(self.directory + ConvergenceTestData.vasprunPattern)
+        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.vasprunPattern)
+        self.xy = np.zeros((2,len(files)))
+        for i in range(len(files)):
+            p = vasprunParser(files[i])
+            self.xy[0,i] = p.getIncarProperty(self.parameter)
+            self.xy[1,i] = p.getTotalEnergy()
 
     def exportCSV(self, filename = 'convergencetestplot.csv'):
         """
@@ -147,6 +177,13 @@ class ConvergenceTestData():
         f.close()
         sys.stdout.write("done!\n\n")
 
-    def getData(self):
+    def getTable(self):
+        """Return xy numpy array"""
         return self.xy
+
+    def getCPUTimes(self):
+        """
+        Returns numpy array of CPU times. Note that CPU times are not available from vasprun.xml files.
+        """
+        return self.cpu
 
