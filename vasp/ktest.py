@@ -1,41 +1,29 @@
-#############################################################################
-#
-# @file ktest.py @version 4
-# This file should be called by <jobfile.sh>
-# Last modified: Nov 26, 2010 19:20:17
-#
-# Example usage:
-#
-#   import os
-#   from oppvasp.vasp.ktest import KTest 
-#
-#   analyzeOnly = ('vaspcommand' not in os.environ)
-#   if analyzeOnly:
-#       print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
-#       basedir = os.path.curdir
-#       vaspcmd = "ls" #dummy
-#       workdir = '/dev/null' #dummy
-#   else:
-#       basedir = os.environ['SUBMITDIR']
-#       vaspcmd = os.environ['vaspcommand']
-#       workdir = os.environ['SCRATCH']
-#
-#   job = KTest(basedir,workdir,vaspcmd)
-#   job.start(analyzeOnly)
-#
-#############################################################################
 import os,sys,re
-from batchjob import BatchJob, ManualBatchStep
 from oppvasp import utils
+from batchjob import BatchJob, ManualBatchStep
 
 class KTest(BatchJob):
+    """
+    Sets up a k-point convergence test batch job using k-points specified in ktest.in
+    Example usage:
 
-    def __init__(self,basedir,workdir,vaspcmd):
-        BatchJob.__init__(self,basedir,workdir,vaspcmd)
+    >>> import os
+    >>> from oppvasp.vasp.ktest import KTest 
+
+    >>> basedir = os.environ['SUBMITDIR']
+    >>> vaspcmd = os.environ['vaspcommand']
+    >>> workdir = os.environ['SCRATCH']
+
+    >>> job = KTest(basedir,workdir,vaspcmd)
+    >>> job.start()
+    """
+
+    def __init__(self, basedir, workdir, vaspcmd, parameterfile = 'convergencetest.in', distributecmd = 'cp -Rupf'):
+        BatchJob.__init__(self,basedir,workdir,vaspcmd,distributecmd)
         self.paramName = 'K' # summary file header
 
         # Read parameter input
-        self.parameterfile = 'ktest.in'
+        self.parameterfile = parameterfile
         os.chdir(self.basedir)
         if not os.path.isfile(self.parameterfile):
             print "Parameter-file '%s' not found!" % (self.parameterfile)
@@ -44,22 +32,22 @@ class KTest(BatchJob):
         lines = f.readlines()
         f.close()
         ktype = lines[0]
-        paramValues = []
+        param_values = []
         for l in lines[1:]:
             m = re.match('^[ \t]*([0-9])?[ \t]*([0-9])?[ \t]*([0-9])?', l)
             if m:
-                paramValues.append(m.group(0))
+                param_values.append(m.group(0))
         
-        KPOINTS= open('KPOINTS', 'r')
-        plines = KPOINTS.readlines()
-        KPOINTS.close()
+        f = open('KPOINTS', 'r')
+        plines = f.readlines()
+        f.close()
 
-        for i in range(len(paramValues)):
-            plines[3] = paramValues[i] + '\n'
+        for i in range(len(param_values)):
+            plines[3] = param_values[i] + '\n'
             ifile = open('KPOINTS.%d' % (i), 'w')
             ifile.writelines(plines)
             ifile.close()
-            self.addStep(KTestStep(i,paramValues[i]))
+            self.addStep(KTestStep(i,param_values[i]))
 
         self.info()
 

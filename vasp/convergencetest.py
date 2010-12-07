@@ -94,10 +94,11 @@ class ConvergenceTestData():
     
     """
 
-    outcarPattern = 'OUTCAR*'
-    vasprunPattern = 'vasprun*.xml'
+    outcar_pattern = 'OUTCAR*'
+    vasprun_pattern = 'vasprun*.xml'
+    cache_filename = 'convergencetestdata.csv'
 
-    def __init__(self, directory = '', parameter = 'ENCUT', verbose = False, useVasprunXML = False):
+    def __init__(self, directory = '', parameter = 'ENCUT', verbose = False, use_vasprun_xml = False, use_cache = True):
         """
         :Parameters:
             directory : string
@@ -106,14 +107,20 @@ class ConvergenceTestData():
                 INCAR parameter to look for (default is 'ENCUT')
             verbose : bool
                 Print info about each step to screen 
-            useVasprunXML : bool
+            use_vasprun_xml: bool
                 True to scan for vasprun.xml files, False to scan for OUTCAR files. 
+            use_cache: bool
+                Cache as csv file
         """
         self.directory = directory
         self.parameter = parameter
         self.verbose = verbose
 
-        if useVasprunXML:
+        # Import data
+        cache_file = directory + ConvergenceTestData.cache_filename
+        if use_cache and os.path.isfile(cache_file):
+            self.import_csv(cache_file)
+        elif use_vasprun_xml:
             self.readXMLfiles()
         else:
             self.readOUTCARfiles()
@@ -123,6 +130,10 @@ class ConvergenceTestData():
         self.xy = np.array([[self.xy[j,i] for i in idx] for j in [0,1]])
         if hasattr(self,'cpu'):
             self.cpu = np.array([self.cpu[i] for i in idx])
+        
+        # Write cache
+        if use_cache and not os.path.isfile(cache_file):
+            self.export_csv(cache_file)
 
         if verbose:
             print "------------------------------------------------"
@@ -139,10 +150,10 @@ class ConvergenceTestData():
     def readOUTCARfiles(self):
         """
         Finds and parses OUTCAR files 
-        using the pattern defined in `ConvergenceTestData.outcarPattern`
+        using the pattern defined in `ConvergenceTestData.outcar_pattern`
         """
-        files = glob.glob(self.directory + ConvergenceTestData.outcarPattern)
-        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.outcarPattern )
+        files = glob.glob(self.directory + ConvergenceTestData.outcar_pattern)
+        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.outcar_pattern )
         self.xy = np.zeros((2,len(files)))
         self.cpu = np.zeros((len(files)))
         for i in range(len(files)):
@@ -154,28 +165,45 @@ class ConvergenceTestData():
     def readXMLfiles(self):
         """
         Finds and parses OUTCAR files 
-        using the pattern defined in `ConvergenceTestData.vasprunPattern`
+        using the pattern defined in `ConvergenceTestData.vasprun_pattern`
         """
-        files = glob.glob(self.directory + ConvergenceTestData.vasprunPattern)
-        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.vasprunPattern)
+        files = glob.glob(self.directory + ConvergenceTestData.vasprun_pattern)
+        print "Found %d files matching '%s%s'" % (len(files), self.directory, ConvergenceTestData.vasprun_pattern)
         self.xy = np.zeros((2,len(files)))
         for i in range(len(files)):
             p = vasprunParser(files[i])
             self.xy[0,i] = p.getIncarProperty(self.parameter)
             self.xy[1,i] = p.getTotalEnergy()
 
-    def exportCSV(self, filename = 'convergencetestplot.csv'):
+    def export_csv(self, filename = 'convergencetestdata.csv'):
         """
         Exports the internal x,y numpy array as a .csv file, 
         that can be imported into Excel or what have you.
         """
-        sys.stdout.write("\nSaving table to %s... " % filename)
+        sys.stdout.write("Saving table to %s... " % filename)
         sys.stdout.flush()
         f = open(filename,'w')
+        f.write(self.parameter+"\tEnergy\tCPU\n")
         for i in range(self.xy.shape[1]):
-            f.write('%.6f\t%.6f\n' % (self.xy[0,i],self.xy[1,i]))
+            if hasattr(self,'cpu'):
+                f.write('%.6f\t%.6f\t%.f\n' % (self.xy[0,i],self.xy[1,i],self.cpu[i]))
+            else:
+                f.write('%.6f\t%.6f\t%.f\n' % (self.xy[0,i],self.xy[1,i],0.))
         f.close()
-        sys.stdout.write("done!\n\n")
+        sys.stdout.write("done!\n")
+
+    def import_csv(self, filename = 'convergencetestdata.csv'):
+        f = open(filename,'r')
+        all_lines = f.readlines()
+        lines = all_lines[1:]   # skip first line
+        self.xy = np.zeros((2,len(lines)))
+        self.cpu = np.zeros(len(lines))
+        for i in range(len(lines)):
+            s = lines[i].split()
+            self.xy[0,i] = float(s[0])
+            self.xy[1,i] = float(s[1])
+            self.cpu[i] = float(s[2])
+        print "%d datapoints read from cache" % (len(lines))
 
     def getTable(self):
         """Return xy numpy array"""
