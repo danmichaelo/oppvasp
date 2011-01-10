@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 10, 2011 17:01:11
+# Last modified: Jan 10, 2011 21:37:04
 #
 # Example usage:
 #
@@ -100,23 +100,6 @@ class BatchJob:
             sf.write(summaryline+"\n")
             sf.close()
 
-class SingleJob(BatchStep):
-    """
-    Single job (in contrast to BatchJob). Basically the same as a single batch step.
-    """
-
-    def __init__(self,basedir,workdir,vaspcmd,distributecmd = "cp -Ruf"):
-        BatchStep.__init__(0)
-        self.basedir = basedir
-        self.workdir = workdir
-        self.vaspcmd = vaspcmd
-        self.distributecmd = distributecmd
-        self['OUTCAR'] = 'OUTCAR']
-        self['vasprun.xml'] = 'vasprun.xml'
-    
-    def start(self, analyzeOnly = False):
-        if (not analyzeOnly): 
-            step.execute()
 
 class BatchStep:
 
@@ -150,7 +133,7 @@ class BatchStep:
     def postprocess(self):
         pass
 
-    def execute(): 
+    def execute(self): 
 
         # Prepare for the current run
         self.preprocess()
@@ -221,6 +204,24 @@ class ManualBatchStep(BatchStep):
 
     def get_name(self):
         return self.index
+
+class SingleJob(BatchStep):
+    """
+    Single job (in contrast to BatchJob). Basically the same as a single batch step.
+    """
+
+    def __init__(self,basedir,workdir,vaspcmd,distributecmd = "cp -Ruf"):
+        BatchStep.__init__(self,0)
+        self.basedir = basedir
+        self.workdir = workdir
+        self.vaspcmd = vaspcmd
+        self.distributecmd = distributecmd
+        self['OUTCAR'] = 'OUTCAR'
+        self['vasprun.xml'] = 'vasprun.xml'
+    
+    def start(self, analyzeOnly = False):
+        if (not analyzeOnly): 
+            self.execute()
 
 
 class BatchJobDataExtractor:
