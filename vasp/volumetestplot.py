@@ -15,7 +15,7 @@ from scitools.std import seq
 from matplotlib import rc
 import glob # for finding files using wildcards
 from oppvasp.utils import query_yes_no
-from oppvasp.vasp.parsers import vasprunParser
+from oppvasp.vasp.parsers import VasprunParser
 __docformat__ = "restructuredtext en"
 
 
@@ -86,7 +86,7 @@ class VolumeTestPlot:
             sys.exit(1)
         self.xy = np.zeros((2,len(xmlFiles)))
         for i in range(len(xmlFiles)):
-            p = vasprunParser(xmlFiles[i])
+            p = VasprunParser(xmlFiles[i])
             self.xy[0,i] = p.getFinalVolume()
             self.xy[1,i] = p.getTotalEnergy()
 
