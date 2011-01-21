@@ -13,13 +13,17 @@ may be faster for very large files.
 Note that this file contains code originally written by olem
 """
 
+from lxml import etree
 import sys,re,math,os
+try:
+    from progressbar import ProgressBar, Percentage, Bar, ETA, FileTransferSpeed, \
+        RotatingMarker, ReverseBar, SimpleProgress
+    progressBarAvailable = True
+except ImportError:
+    print "Module 'progressbar' is not available"
+    progressBarAvailable = False
 
 # Useful notes on libxml: http://codespeak.net/lxml/parsing.html
-from lxml import etree
-from cElementTree import iterparse
-from progressbar import ProgressBar, Percentage, Bar, ETA, FileTransferSpeed, \
-     RotatingMarker, ReverseBar, SimpleProgress
 from StringIO import StringIO
 import numpy as np
 import psutil 
@@ -45,6 +49,25 @@ class IterativeVasprunParser:
     Parser for very large vasprun.xml files, based on iterative xml parsing.
     The functionality of this parser is limited compared to VasprunParser.
     """
+    
+    def __init__(self, filename = 'vasprun.xml', verbose = False):
+        
+        
+        self.filename = filename
+        self.verbose = verbose
+        print_memory_usage()
+        
+        # read beginning of file to find number of ionic steps (NSW)
+        self.nsw = self._find_first_instance('incar',self._get_nsw)
+        self.atoms = self._find_first_instance('atominfo',self._get_atoms)
+        self.natoms = len(self.atoms)
+
+        try:
+            self.nsw
+            #print "Number of ionic steps: %d" % (self.nsw) 
+        except AttributeError:
+            print "Could not find incar:NSW in vasprun.xml"
+            sys.exit(1)
 
     def _get_nsw(self,elem):
         return int(elem.xpath("i[@name='NSW']")[0].text)
@@ -73,25 +96,6 @@ class IterativeVasprunParser:
             break
         del context
         return ret
-    
-    def __init__(self, filename = 'vasprun.xml', verbose = False):
-        
-        self.filename = filename
-        self.verbose = verbose
-        print_memory_usage()
-        
-        # read beginning of file to find number of ionic steps (NSW)
-        self.nsw = self._find_first_instance('incar',self._get_nsw)
-        self.atoms = self._find_first_instance('atominfo',self._get_atoms)
-        self.natoms = len(self.atoms)
-
-        try:
-            self.nsw
-            #print "Number of ionic steps: %d" % (self.nsw) 
-        except AttributeError:
-            print "Could not find incar:NSW in vasprun.xml"
-            sys.exit(1)
-
     def get_num_ionic_steps(self):
         """ Returns the number of ionic steps """
         return self.nsw
@@ -143,7 +147,8 @@ class IterativeVasprunParser:
         self.traj['e_fr_energy'][self.step_no] = float(e_pot[0].text)
 
         self.step_no += 1
-        self.pbar.update(self.step_no)
+        if progressBarAvailable:
+            self.pbar.update(self.step_no)
         #print pos
 
     def _get_trajectories(self):
@@ -160,7 +165,8 @@ class IterativeVasprunParser:
             self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } ]
         self.step_no = 0
         status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
-        self.pbar = ProgressBar(widgets=[status_text,Percentage()], maxval = self.nsw+1).start()
+        if progressBarAvailable:
+            self.pbar = ProgressBar(widgets=[status_text,Percentage()], maxval = self.nsw+1).start()
         
         parser = etree.XMLParser()
         context = etree.iterparse(self.filename, tag='calculation')
@@ -170,8 +176,8 @@ class IterativeVasprunParser:
             for e in parser.error_log:
                 print "Warning: "+e.message
 
-
-        self.pbar.finish()
+        if progressBarAvailable:
+            self.pbar.finish()
         print "Found %d out of %d steps" % (self.step_no,self.nsw)
         if self.step_no < self.nsw:
             print "Stripping empty steps"
