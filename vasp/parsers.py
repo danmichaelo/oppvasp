@@ -13,20 +13,37 @@ may be faster for very large files.
 Note that this file contains code originally written by olem
 """
 
-from lxml import etree
 import sys,re,math,os
+from StringIO import StringIO
+import numpy as np
+
+# Optional:
+imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
+
+try:
+    from lxml import etree
+    imported['lxml'] = True
+    # Useful reading: 
+    # - http://codespeak.net/lxml/parsing.html
+    # - http://www.ibm.com/developerworks/xml/library/x-hiperfparse/
+except ImportError:
+    print "Info: Module 'lxml' is not available"
+
 try:
     from progressbar import ProgressBar, Percentage, Bar, ETA, FileTransferSpeed, \
         RotatingMarker, ReverseBar, SimpleProgress
-    progressBarAvailable = True
+    imported['progressbar'] = True
 except ImportError:
-    print "Module 'progressbar' is not available"
-    progressBarAvailable = False
+    print "Info: Module 'progressbar' is not available"
 
-# Useful notes on libxml: http://codespeak.net/lxml/parsing.html
-from StringIO import StringIO
-import numpy as np
-import psutil 
+try:
+    import psutil 
+    imported['psutil'] = True
+except ImportError:
+    print "Info: Module 'psutil' is not available"
+
+
+
 
 class myFile(object):
     def __init__(self, filename):
@@ -40,9 +57,10 @@ class myFile(object):
 
 
 def print_memory_usage():
-    p = psutil.Process(os.getpid())
-    rss,vms = p.get_memory_info()
-    print "Physical memory: %.1f MB" % (rss/1024.**2)
+    if imported['psutil']:
+        p = psutil.Process(os.getpid())
+        rss,vms = p.get_memory_info()
+        print "Physical memory: %.1f MB" % (rss/1024.**2)
 
 class IterativeVasprunParser:
     """
@@ -52,6 +70,9 @@ class IterativeVasprunParser:
     
     def __init__(self, filename = 'vasprun.xml', verbose = False):
         
+        if not imported['lxml']:
+            print "Error: The module 'lxml' is needed!"
+            sys.exit(1)
         
         self.filename = filename
         self.verbose = verbose
@@ -147,7 +168,7 @@ class IterativeVasprunParser:
         self.traj['e_fr_energy'][self.step_no] = float(e_pot[0].text)
 
         self.step_no += 1
-        if progressBarAvailable:
+        if imported['progressbar']:
             self.pbar.update(self.step_no)
         #print pos
 
@@ -165,7 +186,7 @@ class IterativeVasprunParser:
             self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } ]
         self.step_no = 0
         status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
-        if progressBarAvailable:
+        if imported['progressbar']:
             self.pbar = ProgressBar(widgets=[status_text,Percentage()], maxval = self.nsw+1).start()
         
         parser = etree.XMLParser()
@@ -176,7 +197,7 @@ class IterativeVasprunParser:
             for e in parser.error_log:
                 print "Warning: "+e.message
 
-        if progressBarAvailable:
+        if imported['progressbar']:
             self.pbar.finish()
         print "Found %d out of %d steps" % (self.step_no,self.nsw)
         if self.step_no < self.nsw:
@@ -215,6 +236,10 @@ class VasprunParser:
     """
     
     def __init__(self, filename = 'vasprun.xml', verbose = False):
+        
+        if not imported['lxml']:
+            print "Error: The module 'lxml' is needed!"
+            sys.exit(1)
         
         print_memory_usage()
         if verbose:
