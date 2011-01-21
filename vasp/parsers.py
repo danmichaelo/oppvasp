@@ -17,8 +17,191 @@ import sys,re,math,os
 
 # Useful notes on libxml: http://codespeak.net/lxml/parsing.html
 from lxml import etree
+from cElementTree import iterparse
+from progressbar import ProgressBar, Percentage, Bar, ETA, FileTransferSpeed, \
+     RotatingMarker, ReverseBar, SimpleProgress
 from StringIO import StringIO
 import numpy as np
+import psutil 
+
+class myFile(object):
+    def __init__(self, filename):
+        self.f = open(filename)
+
+    def read(self, size=None):
+        # zap control characters that invalidates the xml
+        #return self.f.next().replace('\x1e', '').replace('some other bad character...' ,'')
+        return re.sub('[\x00-\x09\x0B-\x1F]','',self.f.next())
+
+
+
+def print_memory_usage():
+    p = psutil.Process(os.getpid())
+    rss,vms = p.get_memory_info()
+    print "Physical memory: %.1f MB" % (rss/1024.**2)
+
+class IterativeVasprunParser:
+    """
+    Parser for very large vasprun.xml files, based on iterative xml parsing.
+    The functionality of this parser is limited compared to VasprunParser.
+    """
+
+    def _get_nsw(self,elem):
+        return int(elem.xpath("i[@name='NSW']")[0].text)
+    
+    def _get_atoms(self,elem):
+        atoms = []
+        for rc in elem.xpath("array[@name='atoms']/set/rc"):
+            atoms.append(rc[0].text)
+        return atoms
+
+    def _fast_iter(self, context, func):
+        for event, elem in context:
+            func(elem)
+            elem.clear()
+            while elem.getprevious() is not None:
+                del elem.getparent()[0]
+        del context
+
+    def _find_first_instance(self, tag, func):
+        context = etree.iterparse(self.filename, tag=tag)
+        for event, elem in context:
+            ret = func(elem)
+            elem.clear()
+            while elem.getprevious() is not None:
+                del elem.getparent()[0]
+            break
+        del context
+        return ret
+    
+    def __init__(self, filename = 'vasprun.xml', verbose = False):
+        
+        self.filename = filename
+        self.verbose = verbose
+        print_memory_usage()
+        
+        # read beginning of file to find number of ionic steps (NSW)
+        self.nsw = self._find_first_instance('incar',self._get_nsw)
+        self.atoms = self._find_first_instance('atominfo',self._get_atoms)
+        self.natoms = len(self.atoms)
+
+        try:
+            self.nsw
+            #print "Number of ionic steps: %d" % (self.nsw) 
+        except AttributeError:
+            print "Could not find incar:NSW in vasprun.xml"
+            sys.exit(1)
+
+    def get_num_ionic_steps(self):
+        """ Returns the number of ionic steps """
+        return self.nsw
+
+    def get_num_atoms(self):
+        """ Returns the number of atoms """
+        return self.natoms
+
+    def get_atoms(self):
+        """ Returns an array with the types of the atoms """
+        return self.atoms
+
+    def _get_initial_positions(self,elem):
+        basis= elem.xpath("crystal/varray[@name='basis']/v")
+        basis = [[float(x) for x in p.text.split()] for p in basis]
+
+        pos = elem.xpath("varray[@name='positions']/v")
+        pos = [[float(x) for x in p.text.split()] for p in pos]
+
+        vel = elem.xpath("varray[@name='velocities']/v")
+        vel = [[float(x) for x in p.text.split()] for p in vel]
+
+        return { 'basis': basis, 'positions': pos, 'velocities': vel }
+
+    def get_initial_structure(self):
+        """
+        Returns a (N,3) numpy array with the position of all the atoms at the beginning.
+        """
+        return self._find_first_instance('structure',self._get_initial_positions) 
+
+    def _calculation_tag_found(self, elem):
+        
+        bas = elem.xpath("structure/crystal/varray[@name='basis']/v")
+        self.traj['basis'][self.step_no] = np.array([[float(x) for x in b.text.split()] for b in bas])
+
+        if len(self.traj['atoms']) == 1:
+            pos = elem.xpath("structure/varray[@name='positions']/v[%d]" % (self.atom_no+1))
+            self.traj['atoms'][0]['trajectory'][self.step_no,0:3] = [float(x) for x in pos[0].text.split()]
+        else:
+            pos = elem.xpath("structure/varray[@name='positions']/v")
+            for i in range(len(pos)):
+                self.traj['atoms'][i]['trajectory'][self.step_no,0:3] = [float(x) for x in pos[i].text.split()]
+        
+        e_kin = elem.xpath("energy/i[@name='kinetic']")
+        if e_kin:
+            self.traj['e_kinetic'][self.step_no] = float(e_kin[0].text)
+        
+        e_pot = elem.xpath("energy/i[@name='e_fr_energy']")
+        self.traj['e_fr_energy'][self.step_no] = float(e_pot[0].text)
+
+        self.step_no += 1
+        self.pbar.update(self.step_no)
+        #print pos
+
+    def _get_trajectories(self):
+        self.traj = { 
+            'length': self.nsw+1,
+            'basis' : [ np.zeros((3,3)) for i in range(self.nsw+1) ],
+            'e_fr_energy': np.zeros(self.nsw+1),
+            'e_kinetic': np.zeros(self.nsw+1),
+            'atoms': []
+        }
+        if self.atom_no == -1:
+            self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } for i in range(self.natoms) ]
+        else:
+            self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } ]
+        self.step_no = 0
+        status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
+        self.pbar = ProgressBar(widgets=[status_text,Percentage()], maxval = self.nsw+1).start()
+        
+        parser = etree.XMLParser()
+        context = etree.iterparse(self.filename, tag='calculation')
+        try:
+            self._fast_iter(context, self._calculation_tag_found)
+        except etree.XMLSyntaxError:
+            for e in parser.error_log:
+                print "Warning: "+e.message
+
+
+        self.pbar.finish()
+        print "Found %d out of %d steps" % (self.step_no,self.nsw)
+        if self.step_no < self.nsw:
+            print "Stripping empty steps"
+            newlen = self.step_no
+            self.traj['length'] = newlen 
+            self.traj['e_fr_energy'] = self.traj['e_fr_energy'][0:newlen]
+            self.traj['e_kinetic'] = self.traj['e_kinetic'][0:newlen]
+            self.traj['basis'] = self.traj['basis'][0:newlen]
+            for i in range(len(self.traj['atoms'])):
+                self.traj['atoms'][i]['trajectory'] = self.traj['atoms'][i]['trajectory'][0:newlen]
+        print_memory_usage()
+
+    def get_all_trajectories(self):
+        """
+        get trajectories of all atoms
+        """
+        self.atom_no = -1
+        self._get_trajectories()
+        return self.traj
+
+    def get_single_trajectory(self, atom_no):
+        """
+        <atoms> can be either 
+        The index of the first atom is 0.
+        """
+        self.atom_no = atom_no
+        self._get_trajectories()
+        self.traj['trajectory'] = self.traj['atoms'][0]['trajectory']
+        return self.traj
+    
 
 class VasprunParser:
     """
@@ -27,8 +210,9 @@ class VasprunParser:
     
     def __init__(self, filename = 'vasprun.xml', verbose = False):
         
+        print_memory_usage()
         if verbose:
-            print "Parsing %s (%.2f MB)... " % (filename,os.path.getsize(filename)/1024.**2)
+            print "Reading %s (%.2f MB)... " % (filename,os.path.getsize(filename)/1024.**2)
 
         self.filename = filename
         docstr = open(filename).read()
@@ -36,14 +220,21 @@ class VasprunParser:
         # zap control characters that invalidates the xml
         docstr = re.sub('[\x00-\x09\x0B-\x1F]','',docstr)
 
-        parser = etree.XMLParser()
+        if verbose:
+            print "Parsing... " 
+
+        parser = etree.XMLParser() #recovers from bad characters.
         try:
             self.doc = etree.parse(StringIO(docstr), parser)
+            #self.doc = etree.parse(self.filename, parser)
+            for e in parser.error_log:
+                print "Warning: "+e.message
         except etree.XMLSyntaxError:
             print "Failed to parse xml file: ",filename
-            error = parser.error_log[0]
-            print(error.message)
+            for e in parser.error_log:
+                print "Warning: "+e.message
             sys.exit(2)
+        print_memory_usage()
     
     def get_incar_property(self, propname):
         """ 
@@ -153,6 +344,24 @@ class VasprunParser:
         pos = self.doc.xpath( "/modeling/structure[@name='finalpos']/varray[@name='positions']/v")
         atpos = np.array([float(f) for f in pos[atom_no-1].text.split()])
         return atpos
+    
+    def get_atom_trajectory(self,atom_no):
+        """
+        Returns a (n,3) numpy array with the position of atom <atom_no> for n timesteps.
+        The index of the first atom is 0.
+        """
+        steps = self.doc.xpath( "/modeling/calculation" )
+        num_steps = len(steps)
+        traj = np.zeros((num_steps,3))
+        i = 0
+        for step in steps:
+            pos = step.xpath( "structure/varray[@name='positions']/v[%d]" % (atom_no+1) )[0].text.split()
+            traj[i] = [float(p) for p in pos]
+            i += 1
+        
+        print "Found %d steps" % (i)
+
+        return traj 
 
     def get_final_volume(self):
         """
@@ -252,7 +461,7 @@ class OutcarParser:
             print "Parsing %s (%.1f MB)... " % (outcarname,os.path.getsize(outcarname)/1024.**2)
 
         self.filename = outcarname
-        self.file = fileIterator(self.filename)
+        self.file = FileIterator(self.filename)
         self.selective = selective
         
         # Read the first lines to find the following parameters:
@@ -332,10 +541,15 @@ class OutcarParser:
             m = re.search('kinetic Energy EKIN[ \t]*=[ \t]*([0-9.\-]+)', line)
             if m: 
                 a['energy']['ion_kinetic'][stepno-1] = float(m.group(1))
-
-            m = re.search('maximum distance moved by ions[ \t]*:[ \t]*([0-9.\-E]+)', line)
+            
+            m = re.search('total energy   ETOTAL[ \t]*=[ \t]*([0-9.\-E]+)', line)
             if m: 
                 a['energy']['total'][stepno-1] = float(m.group(1))
+
+            #m = re.search('maximum distance moved by ions[ \t]*:[ \t]*([0-9.\-E]+)', line)
+            #if m: 
+            #    a['energy']['total'][stepno-1] = float(m.group(1))
+
         return a
 
 
@@ -456,43 +670,52 @@ class PoscarParser:
     """
     
     def __init__(self, poscarname='POSCAR'):
-        self.selective = 0 
-        self.readPOSCAR(poscarname)
+        self.selective_dynamics = False
+        self.filename = poscarname
+        self._parse()
 
-    def readPOSCAR(self,poscarname):
-        poscarfile = open( poscarname, 'r')  # r for reading
+    def _parse(self):
+        poscarfile = open( self.filename, 'r')  # r for reading
         commentline = poscarfile.readline()
-        scaleline = poscarfile.readline()
+        self.scale_factor = float(poscarfile.readline()) # lattice constant
         vec1line = poscarfile.readline()
         vec2line = poscarfile.readline()
         vec3line = poscarfile.readline()
+        self.basis = np.zeros((3,3))
+        self.basis[0] = map(float,vec1line.split())
+        self.basis[1] = map(float,vec2line.split())
+        self.basis[2] = map(float,vec3line.split())
+
         sixthline = poscarfile.readline()  # Test for vasp5 syntax
         try:
             dummy = int(sixthline.split()[0])
             atomnumberline = sixthline
         except:
             atomnumberline = poscarfile.readline()
-        atomnumbers = map(int,atomnumberline.split())
-        natoms = 0
-        for i in range(len(atomnumbers)):
-            natoms = natoms + atomnumbers[i]
+        self.atomnumbers = map(int,atomnumberline.split())
+        self.natoms = sum(self.atomnumbers)
         seventhline = poscarfile.readline()
 
         if seventhline[0] == 'S' or seventhline[0] == 's':
-            self.selective = 1
+            self.selective_dynamics = True
             seventhline = poscarfile.readline()
         else:
-            self.selective = 0
+            self.selective_dynamics = False
 
-        if self.selective:
-           x = []; y = []; z = []
-           for j in range(natoms):
+        self.coords = np.zeros((self.natoms,3))
+        for j in range(self.natoms):
             line = poscarfile.readline()  # read a line
-            if not line: break
-            xyz = line.split()
-            x.append(xyz[3])
-            y.append(xyz[4])
-            z.append(xyz[5])
+            self.coords[j] = [float(x) for x in (line.split()[0:3])]
         
         poscarfile.close()
+    
+    def get_coords(self):
+        return self.coords
+
+    def get_basis(self):
+        return self.basis
+
+    def get_scale_factor(self):
+        """ lattice constant"""
+        return self.scale_factor
 

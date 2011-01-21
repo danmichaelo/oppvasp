@@ -1,5 +1,5 @@
 import os,shutil,sys,re,math
-from batchjob import BatchJob, BatchStep
+from job import BatchJob, BatchStep, BatchJobDataExtractor
 import numpy as np
 from oppvasp.utils import query_yes_no
 __docformat__ = "restructuredtext en"
@@ -37,42 +37,58 @@ class ConvergenceTest(BatchJob):
         f = open(self.parameterfile,'r')
         lines = f.readlines()
         f.close()
-        param = lines[0].strip() #trim
-        paramValues = [l.strip() for l in lines[1:]]
-        self.paramName = param # summary file header
+        params = lines[0].split() # trims and splits
+        paramValues = [l.split() for l in lines[1:]]
+        self.paramName = params # summary file header
         
         # Add batch steps
         for i in range(len(paramValues)):
-            self.addStep(ConvergenceTestStep(i,param,paramValues[i]))
+            self.addStep(ConvergenceTestStep(i,params,paramValues[i]))
        
         self.info()
 
 class ConvergenceTestStep(BatchStep):
+    """
+    A single convergence job step.
+    """
 
-    def __init__(self,index,param,paramValue):
+    def __init__(self, index, params, paramValues):
+        """
+        Initializes a convergence test step.
+        <param> and <paramValues> must be arrays of the same length
+        """
         BatchStep.__init__(self,index)
-        self.param = param
-        self.paramValue = paramValue
+        self.params = params
+        self.paramValues = paramValues
 
     def preprocess(self):
-        """Updates INCAR for the current run"""
-        f = open(self['INCAR'],'r+'); fc = f.read()
-        fcr = re.sub(
-            r'%s([ \t]*)=([ \t]*)([.\w]*)' % (self.param),
-            '%s\\1=\\2 %s' % (self.param, self.paramValue),
-            fc)
-        if fc == fcr:
-            fcr = fc+"\n %s = %s\n" % (self.param,self.paramValue)
-        f.seek(0); f.write(fcr); f.truncate(); f.close();
+        """
+        Updates the INCAR file to prepare for the execution of this step 
+        """
+        f = open(self['INCAR'],'r+'); 
+        incar = f.read() # read the whole file
+        for param, paramValue in zip(self.params, self.paramValues):
+            incar_mod = re.sub(
+                r'%s(?P<ws1>[ \t]*)=(?P<ws2>[ \t]*)([.\w]*)' % (param),
+                r'%s\g<ws1>=\g<ws2>%s' % (param, paramValue),
+                incar)
+            if incar_mod == incar:
+                # the parameter was not found. let's add it
+                incar_mod = incar + '\n %s = %s\n' % (param, paramValue)
+            incar = incar_mod
+        f.seek(0); 
+        f.write(incar); 
+        f.truncate(); 
+        f.close();
 
     def postprocess(self):
         pass
 
     def __str__(self):
-        return '%s=%s' % (self.param,self.paramValue)
+        return ','.join(('%s=%s' % (p,v) for p,v in zip(self.params,self.paramValues)))
 
     def get_name(self):
-        return self.paramValue
+        return ','.join(self.paramValues)
 
 
 class ConvergenceTestData(BatchJobDataExtractor):
@@ -81,15 +97,6 @@ class ConvergenceTestData(BatchJobDataExtractor):
     an numpy array holding the convergence parameter and the total energy from all the files.
     The array is sorted on volume and can be plotted using the GenericPlot class  
     or exported as CSV.
-
-    Example usage:
-
-    >>> data = ConvergenceTestData(parameter = 'ENCUT')
-    >>> plot = GenericPlot('')
-    >>> plot.addData(data)
-    >>> plot.setXLabel('$E$')
-    >>> plot.plot('out.pdf')
-    >>> data.exportCSV('out.csv')
     
     """
 

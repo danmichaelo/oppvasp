@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 10, 2011 21:37:04
+# Last modified: Jan 21, 2011 18:04:27
 #
 # Example usage:
 #
@@ -66,14 +66,13 @@ class BatchJob:
             sf = open(self.summaryfile,'w')
             sf.write('# File: '+os.path.abspath(self.summaryfile)+'\n')
             sf.write('# Created: '+datetime.datetime.today().strftime("%F %T")+'\n')
-            sf.write(self.paramName+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
+            sf.write(str(self.paramName)+"\t# pts\tDist.\tToten\t\tCPU\tForce\tPress.\tDrift\n")
             sf.close()
 
         # (4) Go!
         for step in self.steps:
 
             if (not analyzeOnly) and (step.index >= firstStep):
-
                 step.execute()
 
             # Analyze output and print results to summary file
