@@ -112,7 +112,7 @@ elements = {
 }
 
 def getAtomicNumberFromSymbol(symb):
-    symb = symb.strip()
+    symb = symb.strip() # trim
     for k,v in elements.items():
         if v['symb'] == symb:
             return k

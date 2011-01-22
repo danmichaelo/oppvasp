@@ -13,10 +13,12 @@ may be faster for very large files.
 Note that this file contains code originally written by olem
 """
 
+from copy import copy
 import sys,re,math,os
 from StringIO import StringIO
 import numpy as np
 
+from oppvasp import getAtomicNumberFromSymbol
 from oppvasp.md import Trajectory
 
 # Optional:
@@ -80,8 +82,13 @@ class IterativeVasprunParser:
         self.verbose = verbose
         print_memory_usage()
         
-        # read beginning of file to find number of ionic steps (NSW)
-        self.nsw = self._find_first_instance('incar',self._get_nsw)
+        # read beginning of file to find number of ionic steps (NSW) and timestep (POTIM)
+        self.incar = self._find_first_instance('incar', self._incar_tag_found)
+        self.nsw = int(self.incar.xpath("i[@name='NSW']")[0].text)
+
+        # should make a try clause
+        self.potim = float(self.incar.xpath("i[@name='POTIM']")[0].text)
+
         self.atoms = self._find_first_instance('atominfo',self._get_atoms)
         self.natoms = len(self.atoms)
 
@@ -92,14 +99,14 @@ class IterativeVasprunParser:
             print "Could not find incar:NSW in vasprun.xml"
             sys.exit(1)
 
-    def _get_nsw(self,elem):
-        return int(elem.xpath("i[@name='NSW']")[0].text)
+    def _incar_tag_found(self, elem):
+        return copy(elem)
     
-    def _get_atoms(self,elem):
+    def _get_atoms(self, elem):
         atoms = []
         for rc in elem.xpath("array[@name='atoms']/set/rc"):
-            atoms.append(rc[0].text)
-        return atoms
+            atoms.append(getAtomicNumberFromSymbol(rc[0].text))
+        return np.array(atoms, dtype=int)
 
     def _fast_iter(self, context, func):
         for event, elem in context:
@@ -119,6 +126,7 @@ class IterativeVasprunParser:
             break
         del context
         return ret
+
     def get_num_ionic_steps(self):
         """ Returns the number of ionic steps """
         return self.nsw
@@ -174,7 +182,8 @@ class IterativeVasprunParser:
         #print pos
 
     def _get_trajectories(self):
-        self.trajectory = Trajectory(num_steps = self.nsw+1)
+        atoms = self.get_atoms()
+        self.trajectory = Trajectory(num_steps = self.nsw, timestep = self.potim, atoms = atoms)
         self.step_no = 0
         status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
         if imported['progressbar']:
@@ -272,9 +281,7 @@ class VasprunParser:
             raise LookupError('Value not found')    
     
     def get_total_energy(self):
-        """
-        Returns the total energy in electronvolt
-        """
+        """Returns the total energy in electronvolt"""
         results = self.doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
         if results:
             return float(results[0].text)
@@ -469,14 +476,14 @@ class OutcarParser:
     Parser for OUTCAR files
     """
 
-    def __init__(self, outcarname = 'OUTCAR', selective = 0, verbose = False):
+    def __init__(self, outcarname = 'OUTCAR', selective_dynamics = 0, verbose = False):
         
         if verbose:
             print "Parsing %s (%.1f MB)... " % (outcarname,os.path.getsize(outcarname)/1024.**2)
 
         self.filename = outcarname
         self.file = FileIterator(self.filename)
-        self.selective = selective
+        self.selective_dynamics = selective_dynamics 
         
         # Read the first lines to find the following parameters:
         config = { 'IBRION': 0, 'NSW': 0, 'POTIM': 0., 'TEIN': 0., 'TEBEG': 0., 'TEEND': 0., 'SMASS': 0. }
@@ -622,7 +629,7 @@ class OutcarParser:
                             maxdrift = abs(float(driftz))
                         break
                     posx,posy,posz,forx,fory,forz = map(float, line.split())
-                    if self.selective:
+                    if self.selective_dynamics:
                         if (abs(forx) > maxforce) and (x[i] == 'T' or x[i] == 't'):
                             maxforce = abs(forx)
                             maxi = i
@@ -649,10 +656,19 @@ class OutcarParser:
                 break
         outfile.close()
 
-    def getTotalEnergy(self):
+    def get_max_drift(self):
+        return self.maxdrift
+
+    def get_max_pressure(self):
+        return self.maxpressure
+
+    def get_max_force(self):
+        return self.maxforce
+
+    def get_total_energy(self):
         return self.toten
 
-    def getCPUTime(self):
+    def get_cpu_time(self):
         return self.cpu
 
     def get_incar_property(self, propname):
@@ -669,6 +685,7 @@ class OutcarParser:
     
     def get_num_kpoints(self):
         return self.kpoints
+
     #def read_stress(self):
     #    for line in open('OUTCAR'):
     #        if line.find(' in kB  ') != -1:

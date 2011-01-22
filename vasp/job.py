@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 21, 2011 18:04:27
+# Last modified: Jan 22, 2011 15:45:25
 #
 # Example usage:
 #
@@ -83,17 +83,25 @@ class BatchJob:
                 sys.exit(1)
 
             poscar = PoscarParser(step['POSCAR'])
-            outcar = OutcarParser(step['OUTCAR'], poscar.selective)
+            outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
+            outcar.readItAll()
+            
+            try:
+                pressure = "%.4f" % outcar.get_max_pressure()
+            except AttributeError:
+                pressure = "  -  "
 
-            summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%.4f\t%.4f" % (
+
+            summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
                 step.get_name(),
-                outcar.kpoints,
+                outcar.get_num_kpoints(),
                 outcar.dist,
-                outcar.toten,
-                outcar.cpu,
-                outcar.maxforce,
-                outcar.maxpressure,
-                outcar.maxdrift)
+                outcar.get_total_energy(),
+                outcar.get_cpu_time(),
+                outcar.get_max_force(),
+                pressure,
+                outcar.get_max_drift()
+            )
             #print summaryline
             sf = open(self.summaryfile,'a')
             sf.write(summaryline+"\n")
@@ -106,13 +114,14 @@ class BatchStep:
 
         self.index = index
         self.inlist = ['INCAR','POSCAR','POTCAR','KPOINTS']
-        self.outlist = ['OUTCAR','vasprun.xml']
+        self.outlist = ['OUTCAR','vasprun.xml','XDATCAR']
         # Set default values
         self.files = {}
         for i in self.inlist:
             self.files[i] = i
         self.files['OUTCAR'] = 'OUTCAR.%d' % (self.index)
         self.files['vasprun.xml'] = 'vasprun%d.xml' % (self.index)
+        self.files['XDATCAR'] = 'XDATCAR.%d' % (self.index)
     
     def __setitem__(self,key,val):
         if not key in (self.inlist + self.outlist):
@@ -149,8 +158,10 @@ class BatchStep:
         os.system('cp -Rupf %s/* %s/ ' % (self.workdir, self.basedir))
 
         # Save some output files
-        os.rename('OUTCAR',self['OUTCAR'])
-        os.rename('vasprun.xml',self['vasprun.xml'])
+        for f in self.outlist:
+            if os.path.isfile(f):
+                print "Renaming %s to %s" % (f, self[f])
+                os.rename(f,self[f])
 
         # May be used to save more files
         self.postprocess()
