@@ -17,6 +17,8 @@ import sys,re,math,os
 from StringIO import StringIO
 import numpy as np
 
+from oppvasp.md import Trajectory
+
 # Optional:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
 
@@ -148,24 +150,23 @@ class IterativeVasprunParser:
         return self._find_first_instance('structure',self._get_initial_positions) 
 
     def _calculation_tag_found(self, elem):
-        
-        bas = elem.xpath("structure/crystal/varray[@name='basis']/v")
-        self.traj['basis'][self.step_no] = np.array([[float(x) for x in b.text.split()] for b in bas])
 
-        if len(self.traj['atoms']) == 1:
+        bas = elem.xpath("structure/crystal/varray[@name='basis']/v")
+        self.trajectory.set_basis(self.step_no, np.array([[float(x) for x in b.text.split()] for b in bas]))
+
+        if self.trajectory.num_atoms == 1:
             pos = elem.xpath("structure/varray[@name='positions']/v[%d]" % (self.atom_no+1))
-            self.traj['atoms'][0]['trajectory'][self.step_no,0:3] = [float(x) for x in pos[0].text.split()]
         else:
             pos = elem.xpath("structure/varray[@name='positions']/v")
-            for i in range(len(pos)):
-                self.traj['atoms'][i]['trajectory'][self.step_no,0:3] = [float(x) for x in pos[i].text.split()]
+        pos = [[float(x) for x in ap.text.split()] for ap in pos]
+        self.trajectory.set_positions(self.step_no, pos)
         
         e_kin = elem.xpath("energy/i[@name='kinetic']")
         if e_kin:
-            self.traj['e_kinetic'][self.step_no] = float(e_kin[0].text)
+            self.trajectory.set_e_kinetic(self.step_no, float(e_kin[0].text))
         
         e_pot = elem.xpath("energy/i[@name='e_fr_energy']")
-        self.traj['e_fr_energy'][self.step_no] = float(e_pot[0].text)
+        self.trajectory.set_e_total(self.step_no, float(e_pot[0].text))
 
         self.step_no += 1
         if imported['progressbar']:
@@ -173,17 +174,7 @@ class IterativeVasprunParser:
         #print pos
 
     def _get_trajectories(self):
-        self.traj = { 
-            'length': self.nsw+1,
-            'basis' : [ np.zeros((3,3)) for i in range(self.nsw+1) ],
-            'e_fr_energy': np.zeros(self.nsw+1),
-            'e_kinetic': np.zeros(self.nsw+1),
-            'atoms': []
-        }
-        if self.atom_no == -1:
-            self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } for i in range(self.natoms) ]
-        else:
-            self.traj['atoms'] = [ { 'trajectory': np.zeros((self.nsw+1,3)) } ]
+        self.trajectory = Trajectory(num_steps = self.nsw+1)
         self.step_no = 0
         status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
         if imported['progressbar']:
@@ -200,15 +191,7 @@ class IterativeVasprunParser:
         if imported['progressbar']:
             self.pbar.finish()
         print "Found %d out of %d steps" % (self.step_no,self.nsw)
-        if self.step_no < self.nsw:
-            print "Stripping empty steps"
-            newlen = self.step_no
-            self.traj['length'] = newlen 
-            self.traj['e_fr_energy'] = self.traj['e_fr_energy'][0:newlen]
-            self.traj['e_kinetic'] = self.traj['e_kinetic'][0:newlen]
-            self.traj['basis'] = self.traj['basis'][0:newlen]
-            for i in range(len(self.traj['atoms'])):
-                self.traj['atoms'][i]['trajectory'] = self.traj['atoms'][i]['trajectory'][0:newlen]
+        self.trajectory.update_length(self.step_no)
         print_memory_usage()
 
     def get_all_trajectories(self):
@@ -217,7 +200,7 @@ class IterativeVasprunParser:
         """
         self.atom_no = -1
         self._get_trajectories()
-        return self.traj
+        return self.trajectory
 
     def get_single_trajectory(self, atom_no):
         """
@@ -226,8 +209,8 @@ class IterativeVasprunParser:
         """
         self.atom_no = atom_no
         self._get_trajectories()
-        self.traj['trajectory'] = self.traj['atoms'][0]['trajectory']
-        return self.traj
+        self.traj['positions'] = self.traj['atoms'][0]['positions']
+        return self.trajectory
     
 
 class VasprunParser:
