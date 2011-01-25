@@ -47,6 +47,15 @@ except ImportError:
     print "Info: Module 'psutil' is not available"
 
 
+def ZapControlCharacters(filename):
+    print "Document contains control characters that break the parser!"
+    print "Trying to zap them... (this may take some time)"
+    doc = open(filename).read()
+    # zap control characters that invalidates the xml
+    doc = re.sub('[\x00-\x09\x0B-\x1F]','',doc)
+    f = file(filename,'w')
+    f.write(doc)
+    f.close()
 
 
 class myFile(object):
@@ -83,11 +92,11 @@ class IterativeVasprunParser:
         print_memory_usage()
         
         # read beginning of file to find number of ionic steps (NSW) and timestep (POTIM)
-        self.incar = self._find_first_instance('incar', self._incar_tag_found)
-        self.nsw = int(self.incar.xpath("i[@name='NSW']")[0].text)
+        self.params = self._find_first_instance('parameters', self._incar_tag_found)
+        self.nsw = int(self.params.xpath("separator[@name='ionic']/i[@name='NSW']")[0].text)
 
         # should make a try clause
-        self.potim = float(self.incar.xpath("i[@name='POTIM']")[0].text)
+        self.potim = float(self.params.xpath("separator[@name='ionic']/i[@name='POTIM']")[0].text)
 
         self.atoms = self._find_first_instance('atominfo',self._get_atoms)
         self.natoms = len(self.atoms)
@@ -117,13 +126,29 @@ class IterativeVasprunParser:
         del context
 
     def _find_first_instance(self, tag, func):
+        parser = etree.XMLParser()
         context = etree.iterparse(self.filename, tag=tag)
-        for event, elem in context:
-            ret = func(elem)
-            elem.clear()
-            while elem.getprevious() is not None:
-                del elem.getparent()[0]
-            break
+        ret = None
+        try:
+            for event, elem in context:
+                ret = func(elem)
+                elem.clear()
+                while elem.getprevious() is not None:
+                    del elem.getparent()[0]
+                break
+        except etree.XMLSyntaxError:
+            print "XML parsing failed:"
+            type, message, traceback = sys.exc_info()
+            print message
+            for e in parser.error_log:
+                print "XML Error: "+e.message
+            if str(message).split()[0] == 'Char':
+                ZapControlCharacters(self.filename)
+                print
+                print "You may now try to re-run the script."
+                print
+
+            sys.exit(1)
         del context
         return ret
 
@@ -194,6 +219,8 @@ class IterativeVasprunParser:
         try:
             self._fast_iter(context, self._calculation_tag_found)
         except etree.XMLSyntaxError:
+            type, message, traceback = sys.exc_info()
+            print "XML parsing halted:",message
             for e in parser.error_log:
                 print "Warning: "+e.message
 
@@ -220,7 +247,8 @@ class IterativeVasprunParser:
         self._get_trajectories()
         self.traj['positions'] = self.traj['atoms'][0]['positions']
         return self.trajectory
-    
+
+
 
 class VasprunParser:
     """
@@ -233,7 +261,7 @@ class VasprunParser:
             print "Error: The module 'lxml' is needed!"
             sys.exit(1)
         
-        print_memory_usage()
+        #print_memory_usage()
         if verbose:
             print "Reading %s (%.2f MB)... " % (filename,os.path.getsize(filename)/1024.**2)
 
@@ -257,7 +285,7 @@ class VasprunParser:
             for e in parser.error_log:
                 print "Warning: "+e.message
             sys.exit(2)
-        print_memory_usage()
+        #print_memory_usage()
     
     def get_incar_property(self, propname):
         """ 

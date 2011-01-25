@@ -68,18 +68,22 @@ class ConvergenceTestStep(BatchStep):
         f = open(self['INCAR'],'r+'); 
         incar = f.read() # read the whole file
         for param, paramValue in zip(self.params, self.paramValues):
-            incar_mod = re.sub(
-                r'%s(?P<ws1>[ \t]*)=(?P<ws2>[ \t]*)([.\w]*)' % (param),
-                r'%s\g<ws1>=\g<ws2>%s' % (param, paramValue),
-                incar)
-            if incar_mod == incar:
+            search_str = r'%s(?P<ws1>[ \t]*)=(?P<ws2>[ \t]*)([.\w]*)' % (param)
+            matches = re.search(search_str, incar)
+            if matches:
+                incar_mod = re.sub(
+                    search_str,
+                    r'%s\g<ws1>=\g<ws2>%s' % (param, paramValue),
+                    incar)
+            else:
                 # the parameter was not found. let's add it
-                incar_mod = incar + '\n %s = %s\n' % (param, paramValue)
+                incar_mod = incar + '\n %s = %s' % (param, paramValue)
             incar = incar_mod
         f.seek(0); 
         f.write(incar); 
         f.truncate(); 
         f.close();
+        print incar
 
     def postprocess(self):
         pass

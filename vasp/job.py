@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 22, 2011 15:45:25
+# Last modified: Jan 25, 2011 11:04:51
 #
 # Example usage:
 #
