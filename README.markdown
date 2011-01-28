@@ -1,8 +1,14 @@
 ### OPPVASP -- Oslo Python Package for Vasp and Similar Packages
 
-OPPVASP is an attempt of a Python package containing various pre- and 
-post-processing scripts for Ab Initio codes, with a current strong 
-focus on the VASP code. Features are added as needed.
+OPPVASP is an attempt of a Python package wrapping together various 
+pre- and post-processing scripts for VASP and perhaps other 
+Ab Initio codes.
+
+Please note: The code is in a very early development stage, and no 
+parts of it can be considered stable. It may be useful for inspiration,
+but if you are looking for a good python pre-/post-processing pacakge, 
+I would recommend ASE: 
+<https://wiki.fysik.dtu.dk/ase/>.
 
 Some curent features:
 
@@ -13,7 +19,8 @@ Some curent features:
 
 ### Installing
 
-Requirements: matplotlib, scipy, scitools, lxml, numpy
+Requirements: numpy, scipy, matplotlib, scitools, lxml 
+Optional: progressbar
 
     git clone git://github.com/danmichaelo/oppvasp.git
 

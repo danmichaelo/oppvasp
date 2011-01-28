@@ -1,6 +1,10 @@
 
 import sys
 import numpy as np
+import scipy as sp
+
+import time
+
 
 # Optional:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
@@ -129,15 +133,34 @@ class Trajectory:
         if imported['progressbar']:
             pbar.finish()
 
-    def get_displacements(self):
+    def get_displacements(self, coordinates = 'direct'):
         """
         Returns the displacements squared, as an (num_steps, num_atoms)-dimensional array.
         $ \Delta r_i^2(t) = (r_i(t)-r_i(0))^2 $
+        Parameters:
+         - coordinates : either 'direct' or 'cartesian'
         """
-        disp  = (self.positions[:,:,0] - self.positions[0,:,0])**2  # x
-        disp += (self.positions[:,:,1] - self.positions[0,:,1])**2  # y
-        disp += (self.positions[:,:,2] - self.positions[0,:,2])**2  # z
-        return disp
+        if coordinates == 'direct':
+            pos = self.positions
+        elif coordinates == 'cartesian':
+            print "converting to cartesian basis..."
+            t1 = time.clock()
+            pos = np.array([np.dot(p,b) for p,b in zip(self.positions,self.basis)]) # there is surely some faster way!
+            t2 = time.clock()
+            print "(that took",round(t2-t1, 3),"seconds. This function should be optimized!)"
+            # Shouldn't be too hard to make a Fortran module for this code?
+            #for i in range(pos.shape[0]): # axis 0   : 4 
+            #    pos3[i] = np.dot(pos[i],basis[i])
+            #    for j in range(pos.shape[1]): # axis 1 : 5
+            #        #pos2[i,j] = np.dot(pos[i,j],basis[i,j])
+            #        for k in range(pos.shape[2]): # axis 2 : 3
+            #            for l in range(pos.shape[2]): # axis 2 : 3
+            #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
+
+        disp  = (pos[:,:,0] - pos[0,:,0])**2  # x
+        disp += (pos[:,:,1] - pos[0,:,1])**2  # y
+        disp += (pos[:,:,2] - pos[0,:,2])**2  # z
+        return disp.transpose( ) # so axis[0] = at no., axis[1] = time
 
 def pair_correlation_function(x,y,z,S,rMax,dr):
     """Compute the three-dimensional pair correlation function for a set of
