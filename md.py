@@ -1,10 +1,12 @@
+# -*- coding: utf-8; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
+# vim:fenc=utf-8:et:sw=4:ts=4:sts=4:tw=0
 
 import sys
 import numpy as np
 import scipy as sp
 
 import time
-
+import oppvasp
 
 # Optional:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
@@ -55,9 +57,6 @@ class Trajectory:
             self.positions = np.zeros((self.length, self.num_atoms, 3))
         self.positions[step_no] = pos
 
-    def get_single_particle_trajectory(self, atom_no):
-        return self.positions[:,atom_no,:]
-
     def set_e_total(self, step_no, etot):
         self.total_energy[step_no] = etot 
 
@@ -84,24 +83,34 @@ class Trajectory:
         print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
 
 
-    def unwrap_pbc(self, remove_drift = True):
+    def unwrap_pbc(self, remove_drift = True, init_pos = None):
         """ 
-        Unwraps periodic boundary conditions (PBCs), without adding any new atoms.
+        Unwraps periodic boundary conditions (PBCs)
         Note that this procedure produces coordinates outside the unit cell. 
         
-        For each step, the distances between the previous position of an atom and the current position 
-        of the atom and its periodic images is calculated. The shortest distance is chosen, and added to
-        the position vector of that atom.
+        For each step, the distances between the previous position of an atom 
+        and the current position of the atom and its periodic images is 
+        calculated. The shortest distance is chosen, and added to the position 
+        vector of that atom.
 
-        This function was written for the purpose of making it easier to track the path of a diffusing
-        impurity atom, but may also be useful for visualisation purposes.
+        This function was written for the purpose of making it easier to track 
+        the path of a diffusing impurity atom, but may also be useful for 
+        visualisation purposes.
+
+        Optionally, an initial set of coordinates may be specified, typically 
+        from a POSCAR file. This can be useful if comparing coordinates with
+        the ones found in the POSCAR file (which may be negative).
+        They should be in direct coordinates, with the same basis as the first 
+        step of the trajectory.
 
         Example:
-
-        >>> p = IterativeVasprunParser('vasprun.xml')
-        >>> traj = p.get_all_trajectories()
+        
+        >>> pp = PoscarParser('POSCAR')
+        >>> init_pos = pp.get_positions()
+        >>> vp = IterativeVasprunParser('vasprun.xml')
+        >>> traj = vp.get_all_trajectories()
         >>> traj.save('trajectory.npz')
-        >>> traj.unwrap_pbc()
+        >>> traj.unwrap_pbc( init_pos = init_pos )
         >>> traj.save('trajectory_unwrapped.npz')
         
         """
@@ -110,7 +119,10 @@ class Trajectory:
 
         self.dr = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
         self.r = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
-        self.r[0] = self.positions[0]
+        if init_pos == None:
+            self.r[0] = self.positions[0]
+        else:
+            self.r[0] = init_pos
         for stepno in range(1,self.length):
             dr = self.positions[stepno] - self.positions[stepno-1]
             c = np.abs(np.array((dr-1, dr, dr+1)))
@@ -133,34 +145,80 @@ class Trajectory:
         if imported['progressbar']:
             pbar.finish()
 
+    
+    def get_single_particle_trajectory(self, atom_no, coordinates = 'direct'):
+        """
+        Returns the trajectory of a single atom in direct or cartesian coordinates
+        as a numpy array of dimension (steps, 3).
+        Parameters:
+            - coordinates : either 'direct' or 'cartesian'
+        """
+        pos = self.positions[:,atom_no,:]
+        if coordinates == 'cartesian':
+            pos = oppvasp.direct_to_cartesian(pos, self.basis)
+        return pos
+
+
+    def get_all_trajectories(self, coordinates = 'direct'):
+        """
+        Returns the trajectories for all the atoms in direct or cartesian coordinates
+        as a numpy array of dimension (steps, atoms, 3).
+        Parameters:
+            - coordinates : either 'direct' or 'cartesian'
+        """
+        if coordinates == 'direct':
+            return self.positions
+        elif coordinates == 'cartesian':
+            if 'positions_cart' in dir(self):
+                return self.positions_cart
+            else:
+                pos = oppvasp.direct_to_cartesian(self.positions, self.basis)
+                # This conversion is currently stupidly slow, so we cache the cartesian coordinates
+                # as a temporary solution until a faster algorithm is implemented
+                self.positions_cart = pos
+                return pos
+
+
     def get_displacements(self, coordinates = 'direct'):
         """
-        Returns the displacements squared, as an (num_steps, num_atoms)-dimensional array.
+        Returns the displacements $r(t)-r(0)$ as a numpy array:
+            axis[0] = time, 
+            axis[1] = atom_no,
+            axis[2] = coordinate no (x,y,z)
+        """
+        pos = self.get_all_trajectories(coordinates)
+        return pos - pos[0]
+
+
+    def get_displacements_squared(self, coordinates = 'direct'):
+        """
+        Returns the displacements squared $[r(t)-r(0)]^2), as an numpy array:
+            axis[0] = time, 
+            axis[1] = atom_no,
         $ \Delta r_i^2(t) = (r_i(t)-r_i(0))^2 $
         Parameters:
          - coordinates : either 'direct' or 'cartesian'
         """
-        if coordinates == 'direct':
-            pos = self.positions
-        elif coordinates == 'cartesian':
-            print "converting to cartesian basis..."
-            t1 = time.clock()
-            pos = np.array([np.dot(p,b) for p,b in zip(self.positions,self.basis)]) # there is surely some faster way!
-            t2 = time.clock()
-            print "(that took",round(t2-t1, 3),"seconds. This function should be optimized!)"
-            # Shouldn't be too hard to make a Fortran module for this code?
-            #for i in range(pos.shape[0]): # axis 0   : 4 
-            #    pos3[i] = np.dot(pos[i],basis[i])
-            #    for j in range(pos.shape[1]): # axis 1 : 5
-            #        #pos2[i,j] = np.dot(pos[i,j],basis[i,j])
-            #        for k in range(pos.shape[2]): # axis 2 : 3
-            #            for l in range(pos.shape[2]): # axis 2 : 3
-            #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
+        disp = self.get_displacements(coordinates)
+        dispsq  = disp[:,:,0]**2 + disp[:,:,1]**2 + disp[:,:,2]**2
+        return dispsq
+        # transpose to get axis[0] = at no., axis[1] = time
 
-        disp  = (pos[:,:,0] - pos[0,:,0])**2  # x
-        disp += (pos[:,:,1] - pos[0,:,1])**2  # y
-        disp += (pos[:,:,2] - pos[0,:,2])**2  # z
-        return disp.transpose( ) # so axis[0] = at no., axis[1] = time
+    def get_velocities(self, coordinates = 'direct', algorithm = 'naive'):
+        """
+        Returns velocities
+        Parameters:
+         - coordinates: 'direct' returns velocities in [direct coordinates]/[timestep]
+                        'cartesian' returns velocities in Å/s
+        """
+        timestep = self.time[1]-self.time[0]
+        pos = self.get_all_trajectories(coordinates)
+        vel = np.zeros(pos.shape)
+        if algorithm == 'naive':
+            for i in range(1,vel.shape[0]-1):
+                vel[i] = (pos[i+1] - pos[i-1]) / 2.*timestep
+
+        return vel
 
 def pair_correlation_function(x,y,z,S,rMax,dr):
     """Compute the three-dimensional pair correlation function for a set of

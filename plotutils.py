@@ -7,14 +7,13 @@ from matplotlib import rc
 
 import os,copy,sys
 from copy import copy
-import numpy as np
 import matplotlib
 matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 from scipy.optimize import leastsq
 
 from oppvasp import getAtomicNumberFromSymbol
-from oppvasp.vasp.parsers import IterativeVasprunParser 
+from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 from oppvasp.md import Trajectory, pair_correlation_function
 
 
@@ -80,9 +79,9 @@ def symmetric_running_mean(data, n):
     running_avg = np.zeros(data.shape[0])
     current_avg = 0.
     for i in np.arange(data.shape[0]): 
-        if i <= n: # No true mean exists for the first n values..
+        if i <= n: # No true symmetric average exists for the first n values..
             current_avg = np.mean(data[0:i+n+1]) # assymetric mean
-        elif i >= data.shape[0]-n: # no symmetric mean exists for the last n values
+        elif i >= data.shape[0]-n: # no symmetric average exists for the last n values
             current_avg = np.mean(data[i-n:-1]) # assymetric mean
         else:
             current_avg = current_avg - data[i-1-n]/(2*n+1) + data[i+n]/(2*n+1) # update symmetric running mean
@@ -95,12 +94,15 @@ def symmetric_running_median(data, n):
     but it is clearly in need for optimization :)
     """
     running_avg = np.zeros(data.shape[0])
-    current_avg = np.median(data[0:n+1+n]) # symmetric median at n
-    running_avg[0:n+1] = current_avg # No true median exists for the first n values! 
-    for i in np.arange(n+1,data.shape[0]-n,1):
-        current_avg = np.median(data[i-1-n:i+n]) # update symmetric running median 
+    current_avg = 0
+    for i in np.arange(data.shape[0]): 
+        if i <= n: # No true average exists for the first n values..
+            current_avg = np.median(data[0:i+n+1]) # assymetric median
+        elif i >= data.shape[0]-n: # no symmetric median exists for the last n values
+            current_avg = np.median(data[i-n:-1]) # assymetric median
+        else:
+            current_avg = np.median(data[i-1-n:i+n]) # update symmetric running median 
         running_avg[i] = current_avg
-    running_avg[-n:] = current_avg # No true median exists for the last n values! 
     return running_avg
 
 
@@ -108,39 +110,56 @@ def symmetric_running_median(data, n):
 
 class DisplacementPlot:
 
-    def __init__(self):
+    def __init__(self, last_step = -1):
         self.trajs = []
+        self.last_step = last_step
 
-    def add_trajectory(self, xml_filename ='vasprun.xml', npz_pbc_filename = 'trajectory_pbc.npz', npz_filename = 'trajectory_nopbc.npz'):
+    def read_trajectory(self, dir = '', xml_file ='vasprun.xml', npz_pbc_file = 'trajectory_pbc.npz', npz_file = 'trajectory_nopbc.npz', POSCAR_file = ''):
         """
-        This function will read a trajectory from the vasprun.xml file given as xml_filename and save the trajectory 
-        as a NumPy npz cache file npz_pbc_filename. The function will then unwrap the periodic boundary conditions and 
-        save the trajectory for the unwrapped trajectory as a new NumPy npz cache file npz_filename.
+        This function will read a trajectory from the vasprun.xml file given as xml_file and save 
+        the trajectory as a NumPy npz cache file npz_pbc_file. The function will then unwrap the 
+        periodic boundary conditions and save the trajectory for the unwrapped trajectory as a 
+        new NumPy npz cache file npz_file.
 
-        The function will check if a npz file exists, and if it does, read the npz cache instead of the vasprun.xml file. 
-        This is *much* faster.
+        The function will check if a npz file exists, and if it does, read the npz cache instead of the 
+        vasprun.xml file. This is *much* faster.
+
+        If POSCAR_file is specified, the initial positions will be read from this file. This may be 
+        useful for some visualization purposes. While coordinates in POSCAR (and CONTCAR) may be 
+        negative, the coordinates in vasprun.xml and XDATCAR are always wrapped around to become positive.
         """
         
-        if os.path.isfile(npz_filename):
-            traj = Trajectory(filename = npz_filename)
+        if os.path.isfile(dir + npz_file):
+            traj = Trajectory(filename = dir +npz_file)
         else:
-            p = IterativeVasprunParser(xml_filename)
+            p = IterativeVasprunParser(dir + xml_file)
             traj = p.get_all_trajectories()
-            traj.save(npz_pbc_filename)
-            traj.unwrap_pbc()
-            traj.save(npz_filename)
-        traj.r2 = traj.get_displacements(coordinates = 'cartesian')  # displacement r^2
-        traj.avg_r2 = np.sum(traj.r2, axis=0) / traj.num_atoms       # displacement r^2 averaged over all atoms
+            traj.save(dir + npz_pbc_file)
+            if POSCAR_file != '':
+                poscar = PoscarParser(dir + POSCAR_file)
+                pos = poscar.get_positions( coordinates = 'direct' )
+                print "Unwrapping using given initial pos"
+                traj.unwrap_pbc( init_pos = pos)
+            else:
+                traj.unwrap_pbc()
+            traj.save(dir + npz_file)
+        traj.r2 = traj.get_displacements_squared(coordinates = 'cartesian')  # displacement r^2
+        traj.avg_r2 = np.sum(traj.r2, axis=1) / traj.num_atoms       # displacement r^2 averaged over all atoms
         self.trajs.append(traj)
+        if self.last_step == -1 or traj.avg_r2.shape[0] < self.last_step:
+            self.last_step = traj.avg_r2.shape[0]
 
-    def get_diffusion_coeff(self, atom_no, time_stop = -1):
-        """ Calculates diffusion coefficient for atom atom_no """
+    def get_diffusion_coeff(self, atom_no):
+        """ Returns the diffusion coefficient for atom atom_no in cm^2/s. Assumes there is only atom of that kind. """
         for traj in self.trajs:
-            traj.D = np.sum(traj.r2[atom_no,0:time_stop])/traj.time[time_stop] * 10 # to convert from Å^2/fs to cm^2/s
+            # to convert from Å^2/fs to cm^2/s: Å^2/fs * (1e-8 cm/Å)^2 * 1e15 s/fs = 0.1 cm^2/s
+            # divide by 6 in 3 dimensions:
+            fac = 0.1 * 1./6
+            traj.D = np.sum(traj.r2[0:self.last_step,atom_no]) / traj.time[self.last_step-1] * fac
         return [traj.D for traj in self.trajs]
 
     def prepare_plot(self):
-        prepare_canvas(10*72/2.54) # 6 cm in points
+        prepare_canvas('10 cm') 
         p = [0.15, 0.15, 0.05, 0.05]  # margins: left, bottom, right, top. Height: 1-.15-.46 = .39
         self.fig = plt.figure()
         self.ax1 = self.fig.add_axes([ p[0], p[1], 1-p[2]-p[0], 1-p[3]-p[1] ])
@@ -148,24 +167,46 @@ class DisplacementPlot:
         self.ax1.set_xlabel(r'Time [ps]')
         self.ax1.set_ylabel(ur'$\Delta r^2 = [\vec{r}(t)-\vec{r}(0)]^2$ [Å$^2$]')
         self.plotdata = []
-    
-    def add_plot(self, traj_no = 0, atom_no = -1, smoothen = False, style = { 'color': 'black' }, linear_fit = False, fit_startstep = 0):
+
+    def add_plot(self, traj_no = 0, atom_no = -1, what = 'r2', smoothen = False, style = { 'color': 'black' }, linear_fit = False, fit_startstep = 0):
         """
-        Adds a square displacement plot for atom atom_no,
-        or an average square displacement for all the atoms if atom_no = -1.
+        Adds a plot for the property 'what' for atom 'atom_no' or an average for all the atoms if 'atom_no = -1.
+        'what' can take the following values:
+             'r' : displacement plot
+            'r2' : square displacement plot 
         """
         if not 'ax1' in dir(self):
             self.prepare_plot()
         traj = self.trajs[traj_no]
-        x = traj.time/1.e3
-        if atom_no == -1:
-            y =  traj.avg_r2
-        else:
-            y = traj.r2[atom_no]
+        x = traj.time[0:self.last_step]/1.e3
+        if what == 'r2' or what == 'r':
+            if atom_no == -1:
+                y = traj.avg_r2[0:self.last_step]
+            else:
+                y = traj.r2[0:self.last_step, atom_no]
+            if what == 'r':
+                y = np.sqrt(y)
+        elif what == 'x' or what == 'y' or what == 'z':
+            r = traj.get_displacements( coordinates = 'cartesian' )  # displacement vectors
+            if atom_no == -1:
+                raise ValueError("averaging not implemented")
+            else:
+                if what == 'x':
+                    y = r[0:self.last_step, atom_no, 0]
+                elif what == 'y':
+                    y = r[0:self.last_step, atom_no, 1]
+                elif what == 'z':
+                    y = r[0:self.last_step, atom_no, 2]
+        
+        if not x.shape == y.shape:
+            raise ValueError("Uh oh. x shape:",x.shape," y: ",y.shape) 
+
         if smoothen:
-            y = symmetric_running_mean(y, 250)
-            y = symmetric_running_mean(y, 250)
+            #y = symmetric_running_mean(y, 250)
+            y = symmetric_running_mean(y, 500)
+            #y = symmetric_running_median(y, 1000)
         self.ax1.plot(x,y, **style)
+        self.ax1.set_xlim(0,x[-1])
         self.plotdata.append( { 'x': x, 'y': y } )
 
         if linear_fit:
@@ -180,4 +221,5 @@ class DisplacementPlot:
         sys.stdout.flush()
         plt.savefig(filename)
         sys.stdout.write("done!\n")
+
 

@@ -18,6 +18,7 @@ import sys,re,math,os
 from StringIO import StringIO
 import numpy as np
 
+import oppvasp
 from oppvasp import getAtomicNumberFromSymbol
 from oppvasp.md import Trajectory
 
@@ -73,7 +74,7 @@ def print_memory_usage():
     if imported['psutil']:
         p = psutil.Process(os.getpid())
         rss,vms = p.get_memory_info()
-        print "Physical memory: %.1f MB" % (rss/1024.**2)
+        print "[current physical memory usage: %.1f MB]" % (rss/1024.**2)
 
 class IterativeVasprunParser:
     """
@@ -89,10 +90,15 @@ class IterativeVasprunParser:
         
         self.filename = filename
         self.verbose = verbose
+
+        if not os.path.isfile(self.filename):
+            print "Fatal error: The file '%s' was not found or is not a file." % (self.filename)
+            sys.exit(1)
+
         print_memory_usage()
         
         # read beginning of file to find number of ionic steps (NSW) and timestep (POTIM)
-        self.params = self._find_first_instance('parameters', self._incar_tag_found)
+        self.params = self._find_first_instance('parameters', self._params_tag_found)
         self.nsw = int(self.params.xpath("separator[@name='ionic']/i[@name='NSW']")[0].text)
 
         # should make a try clause
@@ -108,7 +114,7 @@ class IterativeVasprunParser:
             print "Could not find incar:NSW in vasprun.xml"
             sys.exit(1)
 
-    def _incar_tag_found(self, elem):
+    def _params_tag_found(self, elem):
         return copy(elem)
     
     def _get_atoms(self, elem):
@@ -178,7 +184,7 @@ class IterativeVasprunParser:
 
     def get_initial_structure(self):
         """
-        Returns a (N,3) numpy array with the position of all the atoms at the beginning.
+        Returns a dictionary containing 'basis', 'positions' and 'velocities' 
         """
         return self._find_first_instance('structure',self._get_initial_positions) 
 
@@ -240,7 +246,7 @@ class IterativeVasprunParser:
 
     def get_single_trajectory(self, atom_no):
         """
-        <atoms> can be either 
+        Returns a single trajectory as (stepno, 3) array
         The index of the first atom is 0.
         """
         self.atom_no = atom_no
@@ -744,6 +750,7 @@ class PoscarParser:
         self.basis[0] = map(float,vec1line.split())
         self.basis[1] = map(float,vec2line.split())
         self.basis[2] = map(float,vec3line.split())
+        self.basis *= self.scale_factor
 
         sixthline = poscarfile.readline()  # Test for vasp5 syntax
         try:
@@ -761,15 +768,18 @@ class PoscarParser:
         else:
             self.selective_dynamics = False
 
-        self.coords = np.zeros((self.natoms,3))
+        self.positions = np.zeros((self.natoms,3))
         for j in range(self.natoms):
             line = poscarfile.readline()  # read a line
-            self.coords[j] = [float(x) for x in (line.split()[0:3])]
+            self.positions[j] = [float(x) for x in (line.split()[0:3])]
         
         poscarfile.close()
     
-    def get_coords(self):
-        return self.coords
+    def get_positions(self, coordinates = 'direct'):
+        if coordinates == 'direct':
+            return self.positions
+        elif coordinates == 'cartesian':
+            return oppvasp.direct_to_cartesian(self.positions)
 
     def get_basis(self):
         return self.basis

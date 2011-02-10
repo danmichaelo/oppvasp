@@ -1,4 +1,8 @@
 """ Oslo Python Package for VASP """
+
+import numpy as np
+import time
+
 elements = {
  1 : { 'mass': 1.0079, 'name': 'Hydrogen', 'symb': 'H' },
  2 : { 'mass' : 4.0026, 'name': 'Helium', 'symb': 'He' }, 
@@ -119,3 +123,24 @@ def getAtomicNumberFromSymbol(symb):
     print "Warning: Atomic symbol '%s' not found!" % (symb)
     return -1
 
+def direct_to_cartesian(positions, basis):
+    """
+    Converts positions in direct coordinates into cartesian coordinates using a given basis
+    'positions' must be a (num_steps, num_atoms, 3) array,
+    'basis' a (3,3) array
+    """
+    print "converting to cartesian basis..."
+    t1 = time.clock()
+    pos = np.array([np.dot(p,b) for p,b in zip(positions, basis)]) # there is surely some faster way!
+    tdiff = time.clock() - t1
+    if tdiff > 1:
+        print "(that took",round(tdiff, 3),"seconds. This function should be optimized!)"
+    # Shouldn't be too hard to make a Fortran module for this code?
+    #for i in range(pos.shape[0]): # axis 0   : 4 
+    #    pos3[i] = np.dot(pos[i],basis[i])
+    #    for j in range(pos.shape[1]): # axis 1 : 5
+    #        #pos2[i,j] = np.dot(pos[i,j],basis[i,j])
+    #        for k in range(pos.shape[2]): # axis 2 : 3
+    #            for l in range(pos.shape[2]): # axis 2 : 3
+    #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
+    return pos
