@@ -73,16 +73,33 @@ def get_minmax(sets):
 
 def symmetric_running_mean(data, n):
     """
-    Each average is calculated as the average during an interval of <n> steps before and <n> steps 
-    after the current point. The first and last <n> steps are therefore "undefined".
+    Calculates a symmetric running mean over the first axis (typically the time axis) 
+    in a dataset 'data', in order to smooth out short-term fluctuations and highlight 
+    longer-term trends or cycles.
+
+    For each point <i> at this axis, the average is computed from the subset [i-n, i+n].
+    The subset size is therefore 2*n+1.
+    
+    No true srunning mean therefore exists for the first n steps and the last n steps. 
+    In these ranges
+
+    >>> data = np.ones((100,3)) * 5 * np.random.rand(100,3)
+    >>> data[:,0] += np.arange(100)*.5
+    >>> data[:,1] += np.arange(100)*.2
+    >>> smoothed = symmetric_running_mean(data,10) 
+    >>> import matplotlib.pyplot as plt
+    >>> plt.plot(data)
+    >>> plt.plot(smoothed)
+
     """
-    running_avg = np.zeros(data.shape[0])
-    current_avg = 0.
+    running_avg = np.zeros(data.shape)
+    current_avg = running_avg[0]
     for i in np.arange(data.shape[0]): 
         if i <= n: # No true symmetric average exists for the first n values..
-            current_avg = np.mean(data[0:i+n+1]) # assymetric mean
+            current_avg = np.mean(data[0:1+2*i],axis=0) # assymetric mean, increase size of subset gradually until reaching the desired size
         elif i >= data.shape[0]-n: # no symmetric average exists for the last n values
-            current_avg = np.mean(data[i-n:-1]) # assymetric mean
+            r = 2*(data.shape[0]-i)
+            current_avg = np.mean(data[-r:],axis=0) # assymetric mean, decrease size of subset gradually until reaching zero 
         else:
             current_avg = current_avg - data[i-1-n]/(2*n+1) + data[i+n]/(2*n+1) # update symmetric running mean
         running_avg[i] = current_avg
@@ -90,18 +107,24 @@ def symmetric_running_mean(data, n):
 
 def symmetric_running_median(data, n):
     """
-    Symmetric running median. This function is surprisingly enough not too slow,
-    but it is clearly in need for optimization :)
+    Calculates a symmetric running median over the first axis in a dataset 'data'. 
+    his function is surprisingly enough not too slow, but it could clearly be optimized!
+
+    From a statistical point of view, the moving average, when used to estimate the underlying trend in a time series,
+    is susceptible to rare events such as rapid shocks or other anomalies. 
+    A more robust estimate of the trend is the simple moving median.
+    
     """
-    running_avg = np.zeros(data.shape[0])
-    current_avg = 0
+    running_avg = np.zeros(data.shape)
+    current_avg = running_avg[0]
     for i in np.arange(data.shape[0]): 
         if i <= n: # No true average exists for the first n values..
-            current_avg = np.median(data[0:i+n+1]) # assymetric median
+            current_avg = np.median(data[0:1+2*i], axis=0) # assymetric median
         elif i >= data.shape[0]-n: # no symmetric median exists for the last n values
-            current_avg = np.median(data[i-n:-1]) # assymetric median
+            r = 2*(data.shape[0]-i)
+            current_avg = np.median(data[-r:], axis=0) # assymetric median
         else:
-            current_avg = np.median(data[i-1-n:i+n]) # update symmetric running median 
+            current_avg = np.median(data[i-1-n:i+n], axis=0) # update symmetric running median 
         running_avg[i] = current_avg
     return running_avg
 
@@ -155,7 +178,7 @@ class DisplacementPlot:
             # to convert from Å^2/fs to cm^2/s: Å^2/fs * (1e-8 cm/Å)^2 * 1e15 s/fs = 0.1 cm^2/s
             # divide by 6 in 3 dimensions:
             fac = 0.1 * 1./6
-            traj.D = np.sum(traj.r2[0:self.last_step,atom_no]) / traj.time[self.last_step-1] * fac
+            traj.D = traj.r2[0:self.last_step,atom_no] / traj.time[0:self.last_step] * fac
         return [traj.D for traj in self.trajs]
 
     def prepare_plot(self):

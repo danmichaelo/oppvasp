@@ -145,6 +145,44 @@ class Trajectory:
         if imported['progressbar']:
             pbar.finish()
 
+    def add_atom(self, positions):
+        """
+        Adds an atom to the trajectory. The new atom must have the same data length as the existing atoms.
+        Note that we do not check if the new atom has periodic boundary conditions or not. This may lead to 
+        inconsistency with the excisting atoms if the periodic boundary conditions have been unwrapped.
+
+        Returns the atom id of the new atom
+        """
+        if positions.shape[0] != self.length:
+            print "Error: The length of the position array for the new atom is %d, while the length of the original trajectory is %d" % (positions.shape[0],self.length)
+            return -1
+        if positions.shape[1] != 3:
+            print "Error: The positions array must be an (n,3) array."
+            return -1
+        p = np.reshape(positions,(positions.shape[0],1,3))
+        self.positions = np.append(self.positions, p, axis = 1)
+        return self.positions.shape[1]-1 # atom id of the new atom
+
+
+    def remove_atom(self, atom_id):
+        """
+        Removes an atom from the trajectory.
+        Not that this will lower the id's of all the remaining atoms.
+        """
+        self.positions = np.delete(self.positions, atom_id, axis = 1)
+        return True
+
+
+    def get_geometric_center(self, atoms):
+        """
+        Replaces the atoms given as a tuple by a new pseudo-atom.
+        Returns the id of the pseudo-atom as an int. 
+
+        Note: This function does not take periodic boundary conditions into account!
+        """
+        geo = np.sum(self.positions[:,atoms],axis=1) / len(atoms)
+        return geo
+
     
     def get_single_particle_trajectory(self, atom_no, coordinates = 'direct'):
         """
