@@ -2,7 +2,7 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Mar 04, 2011 15:37:50
+# Last modified: Mar 04, 2011 18:38:21
 #
 # Example usage:
 #
@@ -78,34 +78,34 @@ class BatchJob:
             # Analyze output and print results to summary file
 
             #vasprun = vasprunParser('vasprun.%d.xml' % (step.index))
-            if not os.path.isfile(step['OUTCAR']):
-                print "No output file '%s' to analyze. Exciting..." % (step['OUTCAR'])
-                sys.exit(1)
-
-            poscar = PoscarParser(step['POSCAR'])
-            outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
-            outcar.readItAll()
-            
-            try:
-                pressure = "%.4f" % outcar.get_max_pressure()
-            except AttributeError:
-                pressure = "  -  "
+            if os.path.isfile(step['OUTCAR']):
+                poscar = PoscarParser(step['POSCAR'])
+                outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
+                outcar.readItAll()
+                
+                try:
+                    pressure = "%.4f" % outcar.get_max_pressure()
+                except AttributeError:
+                    pressure = "  -  "
 
 
-            summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
-                step.get_name(),
-                outcar.get_num_kpoints(),
-                outcar.dist,
-                outcar.get_total_energy(),
-                outcar.get_cpu_time(),
-                outcar.get_max_force(),
-                pressure,
-                outcar.get_max_drift()
-            )
-            #print summaryline
-            sf = open(self.summaryfile,'a')
-            sf.write(summaryline+"\n")
-            sf.close()
+                summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
+                    step.get_name(),
+                    outcar.get_num_kpoints(),
+                    outcar.dist,
+                    outcar.get_total_energy(),
+                    outcar.get_cpu_time(),
+                    outcar.get_max_force(),
+                    pressure,
+                    outcar.get_max_drift()
+                )
+                #print summaryline
+                sf = open(self.summaryfile,'a')
+                sf.write(summaryline+"\n")
+                sf.close()
+            else:
+                print "No output file '%s' to analyze" % (step['OUTCAR'])
+
 
 
 class BatchStep:
