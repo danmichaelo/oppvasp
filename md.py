@@ -244,7 +244,7 @@ class Trajectory:
 
     def get_velocities(self, coordinates = 'direct', algorithm = 'naive'):
         """
-        Returns velocities
+        Returns velocities as a (nsteps,natom,3) array
         Parameters:
          - coordinates: 'direct' returns velocities in [direct coordinates]/[timestep]
                         'cartesian' returns velocities in Å/s
@@ -252,11 +252,69 @@ class Trajectory:
         timestep = self.time[1]-self.time[0]
         pos = self.get_all_trajectories(coordinates)
         vel = np.zeros(pos.shape)
+
+        pbar = ProgressBar(widgets=['Calculating velocities...',Percentage()], maxval = vel.shape[0]).start()
         if algorithm == 'naive':
             for i in range(1,vel.shape[0]-1):
+                pbar.update(i)
                 vel[i] = (pos[i+1] - pos[i-1]) / 2.*timestep
+        pbar.finish()
 
         return vel
+
+    def get_occupancies(self, lattice, step_size = 100):
+        """
+        This method generates
+         (1) A (time, nsites) array with the occupancy of each lattice site at each time. 
+             The occupancy of a given site is defined as the number of atoms whose positions are 
+             closer to this site than any other (periodic boundary conditions are taken into account).
+
+        Parameters:
+            lattice: (nsites,3) numpy array containing the coordinates of the perfect lattice sites in direct coordinates
+            step_size: (int) only include every 'step_size' step (used to speed up things when reading long trajectories)
+
+        Returns:
+            occupancies numpy array
+        """
+
+        natoms = self.num_atoms
+        nsites = lattice.shape[0]
+        n = self.time[::step_size].shape[0]
+
+        pbar = ProgressBar(widgets=['Calculating occupancies...',Percentage()], maxval = n).start()
+        occupancies = np.zeros((n,nsites), dtype=int)
+        inhabitants = np.zeros((n,nsites,4)) # max four atoms per site
+
+        # for each MD step
+        for i in range(n):
+            pbar.update(i)
+            stepno = i * step_size
+            
+            # for each atom
+            for atno in range(natoms):
+                atpos = self.positions[stepno,atno] # note: direct coordinates!
+                
+                # Make a (nsites,3) matrix with vectors pointing from the atom to each lattice site
+                dist = lattice - atpos
+                
+                # Make a (3,nsites,3) tensor with one periodic image in each of the directions +x,-x,+y,-y,+z,-z:
+                dist_i = np.abs(np.array((dist-1,dist,dist+1))) 
+                # and find the shortest distance:
+                dist = np.min(dist_i, axis=0)
+
+                # Make a (nsites) vector with the distances squared (r^2)
+                dist_r2 = np.sum(dist**2, axis=1)
+                
+                # Find closest lattice site(s):
+                closest_site = np.argmin(dist_r2)
+                #closest_sites = np.argsort(dist_r2)
+
+                # Update occupancies array:
+                inhabitants[i,closest_site,occupancies[i,closest_site]] = atno
+                occupancies[i,closest_site] += 1
+           
+        pbar.finish()
+        return occupancies, inhabitants
 
 def pair_correlation_function(x,y,z,S,rMax,dr):
     """Compute the three-dimensional pair correlation function for a set of

@@ -2,15 +2,15 @@
 #
 # @file batchjob.py @version 2
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 25, 2011 11:04:51
+# Last modified: Mar 04, 2011 15:37:50
 #
 # Example usage:
 #
 #   import os
 #   from oppvasp.vasp.batchjob import ManualBatchJob 
 #
-#   analyzeOnly = ('vaspcommand' not in os.environ)
-#   if analyzeOnly:
+#   analyze_only = ('vaspcommand' not in os.environ)
+#   if analyze_only:
 #       print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
 #       basedir = os.path.curdir
 #       vaspcmd = "ls" #dummy
@@ -21,14 +21,14 @@
 #       workdir = os.environ['SCRATCH']
 #
 #   job = ManualBatchJob(basedir,workdir,vaspcmd)
-#   job.start(analyzeOnly)
+#   job.start(analyze_only)
 #
 #############################################################################
 import os,shutil,sys,re,datetime
 import numpy as np
 import glob # for finding files using wildcards
 from operator import itemgetter
-from parsers import VasprunParser, OutcarParser, PoscarParser
+from parsers import VasprunParser, OutcarParser, PoscarParser, IterativeVasprunParser
 __docformat__ = "restructuredtext en"
 
 class BatchJob:
@@ -57,7 +57,7 @@ class BatchJob:
         print
 
 
-    def start(self, analyzeOnly = False, firstStep = 0):
+    def start(self, analyze_only = False, first_step = 0):
 
         os.chdir(self.basedir)
 
@@ -72,7 +72,7 @@ class BatchJob:
         # (4) Go!
         for step in self.steps:
 
-            if (not analyzeOnly) and (step.index >= firstStep):
+            if (not analyze_only) and (step.index >= first_step):
                 step.execute()
 
             # Analyze output and print results to summary file
@@ -229,8 +229,8 @@ class SingleJob(BatchStep):
         self['OUTCAR'] = 'OUTCAR'
         self['vasprun.xml'] = 'vasprun.xml'
     
-    def start(self, analyzeOnly = False):
-        if (not analyzeOnly): 
+    def start(self, analyze_only = False):
+        if (not analyze_only): 
             self.execute()
 
 
@@ -257,7 +257,7 @@ class BatchJobDataExtractor:
 
     """
 
-    outcar_pattern = 'OUTCAR([0-9]*)'
+    outcar_pattern = 'OUTCAR.([0-9]*)'
     vasprun_pattern = 'vasprun([0-9]*).xml'
     cache_filename = 'oppvasp_cache.csv'
 
@@ -306,33 +306,54 @@ class BatchJobDataExtractor:
 
     def extract_data(self):
         """
-        Finds and parses vasprun.xml files using the pattern defined in `BatchJobDataExtractor.vasprun_pattern`
-        or 
-        Finds and parses OUTCAR files using the pattern defined in `BatchJobDataExtractor.outcar_pattern`
+        Finds and parses either
+        (1) all files matching the filename pattern defined in 
+            `BatchJobDataExtractor.vasprun_pattern` as vasprun.xml files or
+        (2) all files matching the filename pattern defined in 
+            `BatchJobDataExtractor.outcar_pattern` as OUTCAR files
         """
-        if self.use_xml:
-            pattern = BatchJobDataExtractor.vasprun_pattern
-        else:
-            pattern = BatchJobDataExtractor.outcar_pattern
-
-        filelist = glob.glob(self.directory + pattern.replace('([0-9]*)','*'))
-        files = []
-        for f in filelist:
-            m = re.search(pattern,f)
-            if m:
-                files.append( { 'index': int(m.group(1)), 'filename': f } )
-        files.sort(key = itemgetter('index'), reverse = False)
-        print "Found %d files matching '%s%s'" % (len(files), self.directory, pattern)
+        
+        filetypes = (
+            ('vasprun',BatchJobDataExtractor.vasprun_pattern),
+            ('outcar',BatchJobDataExtractor.outcar_pattern)
+        )
+        jobs = {}
+        for filetype,pattern in filetypes:
+            filelist = glob.glob(self.directory + pattern.replace('([0-9]*)','*'))
+            for filename in filelist:
+                m = re.search(pattern,filename)
+                if m:
+                    index = m.group(1)
+                    if not index in jobs:
+                        jobs[index] = { }
+                    jobs[index][filetype] = filename
+        print "Found output files from %d jobs" % (len(jobs))
+        if self.verbose:
+            for key,val in jobs.items():
+                print key+':'
+                for key2,val2 in val.items():
+                    print "    "+val2
 
         num_cols = len(self.data_spec)
-        num_rows = len(files)
+        num_rows = len(jobs)
         self.data = [[0 for i in range(num_cols)] for j in range(num_rows)]
-        for i in range(num_rows):
-            if self.use_xml:
-                parser = VasprunParser(files[i]['filename'], verbose = self.verbose)
-            else:
-                parser = OutcarParser(files[i]['filename'], verbose = self.verbose)
+        i = 0
+        for index, files in sorted(jobs.items()):
+            if self.verbose:
+                print 
+            parser = None
             for j in range(num_cols):
+                fn = self.data_spec[j]['fn']
+                if not fn in dir(parser):
+                    oldparser = parser
+                    parser = self._get_parser(files, fn)
+                    if parser is None:
+                        print "Uh oh, the extractor method '%s' was not found " % (fn) \
+                            + "in any of the available parsers for the files:"
+                        print files
+                        sys.exit(1)
+                    if self.verbose:
+                        print "switched from %s to %s for %s " % (oldparser,parser,fn)
                 extract_function = getattr(parser, self.data_spec[j]['fn'])
                 if 'params' in self.data_spec[j]:
                     self.data[i][j] = extract_function(*self.data_spec[j]['params']) 
@@ -341,6 +362,22 @@ class BatchJobDataExtractor:
                 if 'type' in self.data_spec[j]:
                     if self.data_spec[j]['type'] == 'float':
                         self.data[i][j] = float(self.data[i][j])
+            i+=1
+        if self.verbose:
+            print 
+
+    def _get_parser(self, files, method):
+        """
+        Returns a suitable parser to extract 'method' given a list of 'files'.
+        If no suitable parser is found, the method returns None.
+        """
+        if 'vasprun' in files and method in dir(IterativeVasprunParser):
+            return IterativeVasprunParser(files['vasprun'], verbose = self.verbose)
+        elif 'vasprun' in files and method in dir(VasprunParser):
+            return VasprunParser(files['vasprun'], verbose = self.verbose)
+        elif 'outcar' in files and method in dir(OutcarParser):
+            return OutcarParser(files['outcar'], verbose = self.verbose)
+        return None
 
     def get_data(self):
         """Returns data"""

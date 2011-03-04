@@ -81,6 +81,9 @@ class IterativeVasprunParser:
     Parser for very large vasprun.xml files, based on iterative xml parsing.
     The functionality of this parser is limited compared to VasprunParser.
     """
+
+    def __str__(self):
+        return "iterative vasprun parser"
     
     def __init__(self, filename = 'vasprun.xml', verbose = False):
         
@@ -260,6 +263,9 @@ class VasprunParser:
     """
     Parser for vasprun.xml files, making use of libxml for relatively fast parsing.
     """
+    
+    def __str__(self):
+        return "vasprun parser"
     
     def __init__(self, filename = 'vasprun.xml', verbose = False):
         
@@ -470,6 +476,7 @@ class FileIterator:
     Abstract iterator for reading files
     """
 
+
     def __init__(self, filename, cache = True):
         """
         If <cache> is set to True, the whole file is read in at once. 
@@ -509,6 +516,9 @@ class OutcarParser:
     """
     Parser for OUTCAR files
     """
+    
+    def __str(self):
+        return "OUTCAR parser"
 
     def __init__(self, outcarname = 'OUTCAR', selective_dynamics = 0, verbose = False):
         
