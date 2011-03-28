@@ -8,7 +8,7 @@ import scipy as sp
 import time
 import oppvasp
 
-# Optional:
+# Status of optional Python modules:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
 try:
     from progressbar import ProgressBar, Percentage, Bar, ETA, FileTransferSpeed, \
@@ -18,7 +18,7 @@ except ImportError:
     print "Info: Module 'progressbar' is not available"
 
 
-class Trajectory:
+class Trajectory(object):
 
     def __init__(self, num_steps = 0, num_atoms = 0, filename = '', timestep = 1., atoms = []):
         if filename != '':
@@ -27,13 +27,16 @@ class Trajectory:
             self.atoms = atoms
             self.length = num_steps
             self.num_atoms = num_atoms
-            self.time = np.zeros(self.length)
+            self._time = np.zeros(self.length)
             self.basis = [ np.zeros((3,3)) for i in range(self.length) ]
             self.total_energy = np.zeros(self.length)
             self.kinetic_energy = np.zeros(self.length)
             if self.num_atoms > 0:
-                self.positions = np.zeros((num_steps, num_atoms, 3))
+                self._positions = np.zeros((num_steps, num_atoms, 3))
             self.set_timestep(timestep)
+        # Set default selection to the whole trajectory:
+        self.in_point = 0
+        self.out_point = self.length
 
     def update_length(self, new_length):
         if new_length < self.length:
@@ -42,20 +45,70 @@ class Trajectory:
             self.total_energy = self.total_energy[0:new_length]
             self.kinetic_energy = self.kinetic_energy[0:new_length]
             self.basis = self.basis[0:new_length]
-            self.time = self.time[0:new_length]
-            self.positions = self.positions[0:new_length]
+            self._time = self.time[0:new_length]
+            self._positions = self._positions[0:new_length]
+    
+    def set_selection(self, in_point = 0, out_point = -1):
+        """
+        Selects a part of the trajectory. Once a part of the trajectory has been selected, 
+        only that part of the trajectory is considered by the various functions in this class.
+        To clear the selection, just call set_selection with no arguments.
+
+        Parameters
+        ----------
+        in_point : int
+            The frame number to mark the beginning of the selection
+            Default is 0
+        out_point : int
+            The frame number to mark the end of the selection
+            Default is -1
+
+        Examples
+        ----------
+        >>> traj = Trajectory( filename = 'trajectory.npz' )
+        >>> traj.set_selection(10000, 20000)
+        >>> d = traj.get_displacements()
+        >>> t = traj.time   # getter function returns the correct interval
+        >>> plt.plot(t,d)
+
+        """
+        self.in_point = in_point
+        if out_point == -1:
+            out_point = self.length # to include the very last element
+        self.out_point = out_point
+    
+    #------------------- Begin Properties -------------------------------
+
+    @property
+    def time(self):
+        """
+        nsteps array"
+        """
+        return self._time[self.in_point:self.out_point]
 
     def set_timestep(self, timestep):
-        self.time = np.arange(self.length) * timestep
-    
-    def set_basis(self, step_no, bas):
-        self.basis[step_no] = bas
+        self._time = np.arange(self.length) * timestep
+
+    @property
+    def positions(self):
+        """
+        nsteps x natoms x 3 array containing the direct coordinates of all atoms for all steps
+        """
+        return self._positions[self.in_point:self.out_point]
+
+    @positions.setter
+    def positions(self, val):
+        self._positions = val
 
     def set_positions(self, step_no, pos):
         if self.num_atoms == 0:
             self.num_atoms = len(pos)
-            self.positions = np.zeros((self.length, self.num_atoms, 3))
-        self.positions[step_no] = pos
+            self._positions = np.zeros((self.length, self.num_atoms, 3))
+        self._positions[step_no] = pos
+
+    def set_basis(self, step_no, bas):
+        self.basis[step_no] = bas
+
 
     def set_e_total(self, step_no, etot):
         self.total_energy[step_no] = etot 
@@ -63,23 +116,29 @@ class Trajectory:
     def set_e_kinetic(self, step_no, ekin):
         self.kinetic_energy[step_no] = ekin
 
+    #------------------- End Properties -------------------------------
+
     def save(self, filename):
-        """ Saves the trajectory to a *.npz binary file using numpy.savez """
-        np.savez(filename, basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, pos = self.positions, 
-            time = self.time, atoms = self.atoms)
+        """ 
+        Saves the trajectory to a *.npz binary file using numpy.savez 
+        """
+        np.savez(filename, basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, pos = self._positions, 
+            time = self._time, atoms = self.atoms)
         print "Wrote trajectory (%d atoms, %d steps) to %s" % (self.num_atoms, self.length, filename)
 
     def load(self, filename):
-        """ Loading the trajectory from a *.npz numpy binary file using numpy.load """
+        """ 
+        Loading the trajectory from a *.npz numpy binary file using numpy.load 
+        """
         npz = np.load(filename)
         self.atoms = npz['atoms']
         self.basis = npz['basis']
         self.total_energy = npz['tote']
         self.kinetic_energy = npz['kine']
-        self.positions = npz['pos']
-        self.time = npz['time']
-        self.length = self.positions.shape[0]
-        self.num_atoms = self.positions.shape[1] 
+        self._positions = npz['pos']
+        self._time = npz['time']
+        self.length = self._positions.shape[0]
+        self.num_atoms = self._positions.shape[1] 
         print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
 
 
@@ -104,6 +163,7 @@ class Trajectory:
         step of the trajectory.
 
         Example:
+        ----------
         
         >>> pp = PoscarParser('POSCAR')
         >>> init_pos = pp.get_positions()
@@ -130,6 +190,8 @@ class Trajectory:
             dr += diff
             self.dr[stepno] = dr
             self.r[stepno] = self.r[stepno-1] + dr
+            if np.max(dr) > 1:
+                print "Warning: anomalously large displacement of %.1f between step %d and %d" % (dr,stepno,stepno-1)
 
             # This may not be necessary...
             drp = self.r[stepno] - self.positions[stepno]
@@ -188,8 +250,10 @@ class Trajectory:
         """
         Returns the trajectory of a single atom in direct or cartesian coordinates
         as a numpy array of dimension (steps, 3).
-        Parameters:
-            - coordinates : either 'direct' or 'cartesian'
+
+        Parameters
+        ----------
+            coordinates : either 'direct' or 'cartesian'
         """
         pos = self.positions[:,atom_no,:]
         if coordinates == 'cartesian':
@@ -257,7 +321,7 @@ class Trajectory:
         if algorithm == 'naive':
             for i in range(1,vel.shape[0]-1):
                 pbar.update(i)
-                vel[i] = (pos[i+1] - pos[i-1]) / 2.*timestep
+                vel[i] = (pos[i+1] - pos[i-1]) / 2.*timestep 
         pbar.finish()
 
         return vel

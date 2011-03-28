@@ -125,17 +125,37 @@ def getAtomicNumberFromSymbol(symb):
 
 def direct_to_cartesian(positions, basis):
     """
-    Converts positions in direct coordinates into cartesian coordinates using a given basis
-    'positions' must be a (num_steps, num_atoms, 3) array,
-    'basis' a (3,3) array
+    Converts positions in direct coordinates into cartesian coordinates using a given basis.
+
+    Parameters
+    ----------
+    positions : num_steps x num_atoms x 3 numpy array
+        Array containing the direct coordinates of num_atoms atoms for num_steps steps
+    basis : num_steps x 3 x 3 numpy array
+        Array containg the lattice vectors in Cartesian coordinates
+
     """
     print "converting to cartesian basis..."
     t1 = time.clock()
-    pos = np.array([np.dot(p,b) for p,b in zip(positions, basis)]) # there is surely some faster way!
+    
+    # Alternative 1
+    #pos = np.array([np.dot(p,b) for p,b in zip(positions, basis)]) # there is surely some faster way!
+    
+    # Alternative 2 is about 10 times faster than alternative 1
+    pos = np.zeros(positions.shape)
+    i = 0
+    for p,b in zip(positions,basis):
+        pos[i] = np.dot(p,b)
+        i += 1
+    
+    # Alternative 3: if the cell is static (3 x 3 instead of nsteps x 3 x 3):
+    # perhaps we can use tensordot anyway? I'm not sure.
+    #pos = np.tensordot(positions, basis, axes=([2],[0]))
+    
     tdiff = time.clock() - t1
     if tdiff > 1:
         print "(that took",round(tdiff, 3),"seconds. This function should be optimized!)"
-    # Shouldn't be too hard to make a Fortran module for this code?
+    # We could make a Fortran module doing the conversion... 
     #for i in range(pos.shape[0]): # axis 0   : 4 
     #    pos3[i] = np.dot(pos[i],basis[i])
     #    for j in range(pos.shape[1]): # axis 1 : 5
@@ -144,3 +164,4 @@ def direct_to_cartesian(positions, basis):
     #            for l in range(pos.shape[2]): # axis 2 : 3
     #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
     return pos
+

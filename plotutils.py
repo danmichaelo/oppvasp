@@ -16,7 +16,6 @@ from oppvasp import getAtomicNumberFromSymbol
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 from oppvasp.md import Trajectory, pair_correlation_function
 
-
 def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5): 
     """
     Prepares a figure with specified width <width> and height 
@@ -130,68 +129,77 @@ def symmetric_running_median(data, n):
 
 
 
+class DisplacementPlot(object):
+    """
+    The DisplacementPlot class is a simple script for making 
+    some quick plots from MD trajectories.
+    """
 
-class DisplacementPlot:
-
-    def __init__(self, last_step = -1):
-        self.trajs = []
-        self.last_step = last_step
-
-    def read_trajectory(self, dir = '', xml_file ='vasprun.xml', npz_pbc_file = 'trajectory_pbc.npz', npz_file = 'trajectory_nopbc.npz', POSCAR_file = ''):
+    def __init__(self, trajectories):
         """
-        This function will read a trajectory from the vasprun.xml file given as xml_file and save 
-        the trajectory as a NumPy npz cache file npz_pbc_file. The function will then unwrap the 
-        periodic boundary conditions and save the trajectory for the unwrapped trajectory as a 
-        new NumPy npz cache file npz_file.
+        Construct a DisplacementPlot object.
 
-        The function will check if a npz file exists, and if it does, read the npz cache instead of the 
-        vasprun.xml file. This is *much* faster.
-
-        If POSCAR_file is specified, the initial positions will be read from this file. This may be 
-        useful for some visualization purposes. While coordinates in POSCAR (and CONTCAR) may be 
-        negative, the coordinates in vasprun.xml and XDATCAR are always wrapped around to become positive.
-        """
+        Parameters
+        ----------
+        trajectories : Trajectory or array
+            Either a single Trajectory object or a list of such objects.
         
-        if os.path.isfile(dir + npz_file):
-            traj = Trajectory(filename = dir +npz_file)
-        else:
-            p = IterativeVasprunParser(dir + xml_file)
-            traj = p.get_all_trajectories()
-            traj.save(dir + npz_pbc_file)
-            if POSCAR_file != '':
-                poscar = PoscarParser(dir + POSCAR_file)
-                pos = poscar.get_positions( coordinates = 'direct' )
-                print "Unwrapping using given initial pos"
-                traj.unwrap_pbc( init_pos = pos)
-            else:
-                traj.unwrap_pbc()
-            traj.save(dir + npz_file)
-        traj.r2 = traj.get_displacements_squared(coordinates = 'cartesian')  # displacement r^2
-        traj.avg_r2 = np.sum(traj.r2, axis=1) / traj.num_atoms       # displacement r^2 averaged over all atoms
-        self.trajs.append(traj)
-        if self.last_step == -1 or traj.avg_r2.shape[0] < self.last_step:
-            self.last_step = traj.avg_r2.shape[0]
+        Examples
+        ----------
+        >>> from oppvasp.vasp.parsers import read_trajectory
+        >>> traj = read_trajectory(unwrap_pbcs = True)
+        >>> # To only plot the part from step 10000 to step 20000:
+        >>> traj.set_selection(10000, 20000)
+        >>> 
+        >>> dp = DisplacementPlot(traj)
+        >>> dp.add_plot( what = 'r2', smoothen = True, 
+        >>>     style = { 'color' : 'black' } ) # avg r^2 for all atoms 
+        >>> dp.add_plot( what = 'r2', atom_no = 0, smoothen = True, linear_fit = True)
+        >>> dp.add_plot( what = 'r2', atom_no = 0, smoothen = False, 
+        >>>     style = { 'zorder' : -1, 'alpha': 0.4, 'color': 'gray' } )
 
-    def get_diffusion_coeff(self, atom_no):
-        """ Returns the diffusion coefficient for atom atom_no in cm^2/s. Assumes there is only atom of that kind. """
-        for traj in self.trajs:
-            # to convert from Å^2/fs to cm^2/s: Å^2/fs * (1e-8 cm/Å)^2 * 1e15 s/fs = 0.1 cm^2/s
-            # divide by 6 in 3 dimensions:
-            fac = 0.1 * 1./6
-            traj.D = traj.r2[0:self.last_step,atom_no] / traj.time[0:self.last_step] * fac
-        return [traj.D for traj in self.trajs]
-
-    def prepare_plot(self):
+        """
+        if not 'pop' in dir(trajectories):
+            trajectories = [trajectories]
+        for traj in trajectories:
+            traj.r2 = traj.get_displacements_squared(coordinates = 'cartesian')  # displacement r^2
+            traj.avg_r2 = np.sum(traj.r2, axis=1) / traj.num_atoms       # displacement r^2 averaged over all atoms
+        self.trajs = trajectories
+        
         prepare_canvas('10 cm') 
         p = [0.15, 0.15, 0.05, 0.05]  # margins: left, bottom, right, top. Height: 1-.15-.46 = .39
         self.fig = plt.figure()
         self.ax1 = self.fig.add_axes([ p[0], p[1], 1-p[2]-p[0], 1-p[3]-p[1] ])
         self.ax1.grid(True, which='major', color = 'gray', alpha = 0.5)
         self.ax1.set_xlabel(r'Time [ps]')
-        self.ax1.set_ylabel(ur'$\Delta r^2 = [\vec{r}(t)-\vec{r}(0)]^2$ [Å$^2$]')
         self.plotdata = []
+    
+    def get_diffusion_coeff(self, atoms):
+        """ 
+        Returns the diffusion coefficient for a set of atoms in cm^2/s. 
 
-    def add_plot(self, traj_no = 0, atom_no = -1, what = 'r2', smoothen = False, style = { 'color': 'black' }, linear_fit = False, fit_startstep = 0):
+        Parameters
+        ----------
+        atoms : list
+            The atoms to calculate the diffusion coefficient for. 
+            The atoms should be of the same type.
+        """
+        for traj in self.trajs:
+            # to convert from Å^2/fs to cm^2/s: Å^2/fs * (1e-8 cm/Å)^2 * 1e15 s/fs = 0.1 cm^2/s
+            # divide by 6 in 3 dimensions:
+            fac = 0.1 * 1./6
+            D = np.zeros(traj.r2.shape[0])
+            # note: at first it seems more intelligible to just use traj.r2[1:atoms] since 
+            # NumPy allows such a splicing.
+            # but for some reason this completely hangs the computer. Perhaps a bug in NumPy.
+            for atno in atoms:
+                D[1:] += traj.r2[1:,atno] / traj.time[1:] 
+            traj.D = D * fac / len(atoms)
+        return [traj.D for traj in self.trajs]
+
+
+    def add_plot(self, traj_no = 0, atom_no = -1, what = 'r2', smoothen = False, style = { 'color': 'black' }, 
+            linear_fit = False):
         """
         Adds a plot for the property 'what' for atom 'atom_no' or an average for all the atoms if 'atom_no = -1.
         'what' can take the following values:
@@ -201,43 +209,53 @@ class DisplacementPlot:
         if not 'ax1' in dir(self):
             self.prepare_plot()
         traj = self.trajs[traj_no]
-        x = traj.time[0:self.last_step]/1.e3
+        x = traj.time[:]/1.e3
         if what == 'r2' or what == 'r':
+            self.ax1.set_ylabel(ur'$\Delta r^2$ [Å$^2$]')
             if atom_no == -1:
-                y = traj.avg_r2[0:self.last_step]
+                y = traj.avg_r2[:]
             else:
-                y = traj.r2[0:self.last_step, atom_no]
+                y = traj.r2[:, atom_no]
             if what == 'r':
                 y = np.sqrt(y)
+                self.ax1.set_ylabel(ur'$\Delta r$ [Å]')
         elif what == 'x' or what == 'y' or what == 'z':
             r = traj.get_displacements( coordinates = 'cartesian' )  # displacement vectors
             if atom_no == -1:
                 raise ValueError("averaging not implemented")
             else:
                 if what == 'x':
-                    y = r[0:self.last_step, atom_no, 0]
+                    y = r[:, atom_no, 0]
+                    self.ax1.set_ylabel(ur'$\Delta x$ [Å]')
                 elif what == 'y':
-                    y = r[0:self.last_step, atom_no, 1]
+                    y = r[:, atom_no, 1]
+                    self.ax1.set_ylabel(ur'$\Delta y$ [Å]')
                 elif what == 'z':
-                    y = r[0:self.last_step, atom_no, 2]
+                    y = r[:, atom_no, 2]
+                    self.ax1.set_ylabel(ur'$\Delta z$ [Å]')
+        elif what == 'D':
+            D = self.get_diffusion_coeff([atom_no])
+            y = D[0]
+            self.ax1.set_ylabel(ur'$D$ [cm$^2$/s]')
         
         if not x.shape == y.shape:
-            raise ValueError("Uh oh. x shape:",x.shape," y: ",y.shape) 
+            raise ValueError("Uh oh, shape of x,",x.shape,", does not match shape of y,",y.shape) 
 
         if smoothen:
             #y = symmetric_running_mean(y, 250)
             y = symmetric_running_mean(y, 500)
             #y = symmetric_running_median(y, 1000)
         self.ax1.plot(x,y, **style)
-        self.ax1.set_xlim(0,x[-1])
+        self.ax1.set_xlim(x[0],x[-1])
         self.plotdata.append( { 'x': x, 'y': y } )
 
         if linear_fit:
-            fitfunc = lambda p, x: p[0] + p[1]*x  # Target function
+            fitfunc = lambda p, x: p[0] + p[1]*x  # Target function 
             errfunc = lambda p, x, y: fitfunc(p, x) - y # Distance to the target function
             p0 = [0,np.max(y)/np.max(x)] # Initial guess for the parameters
-            p1, success = leastsq(errfunc, p0[:], args=(x[fit_startstep:],y[fit_startstep:]))
-            self.ax1.plot(x[fit_startstep:], fitfunc(p1, time[fit_startstep:]), **styles[0])
+            p1, success = leastsq(errfunc, p0[:], args=(x,y))
+            print p1
+            self.ax1.plot(x, fitfunc(p1, traj.time/1.e3), color = 'red' )
 
     def save_plot(self, filename = 'displacement.pdf'):
         sys.stdout.write("Writing %s... " % os.path.basename(filename))

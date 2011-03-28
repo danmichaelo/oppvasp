@@ -48,6 +48,68 @@ except ImportError:
     print "Info: Module 'psutil' is not available"
 
 
+def read_trajectory(dir = '', xml_file ='vasprun.xml', npz_pbc_file = 'trajectory_pbc.npz', 
+        npz_file = 'trajectory_nopbc.npz', poscar_file = '', unwrap_pbcs = False):
+    """
+    This function will read a trajectory from the vasprun.xml file given as xml_file and save 
+    the trajectory as a NumPy npz cache file npz_pbc_file. The function will then unwrap the 
+    periodic boundary conditions and save the trajectory for the unwrapped trajectory as a 
+    new NumPy npz cache file npz_file.
+
+    The function will check if a npz file exists, and if it does, read the npz cache instead of the 
+    vasprun.xml file. This is *much* faster.
+
+    If POSCAR_file is specified, the initial positions will be read from this file. This may be 
+    useful for some visualization purposes. While coordinates in POSCAR (and CONTCAR) may be 
+    negative, the coordinates in vasprun.xml and XDATCAR are always wrapped around to become positive.
+
+    Parameters
+    ----------
+    dir : str
+        Directory to read files from
+        Default is current directory
+    xml_file : str
+        Filename of vasprun.xml file
+        Default is 'vasprun.xml'
+    npz_pbc_file : str
+        Filename of the npz cache file to write. 
+        Set to blank to disable writing of this file.
+        Default is 'trajectory_pbc.npz'
+    npz_file : str
+        Filename of the npz cache file to write with periodic boundary conditions (PBCs) unwrapped. 
+        Set to blank to disable the writing of this file.
+        Default is 'trajectory_nopbc.npz'
+    poscar_file : str
+        Filename of poscar file to get ideal lattice sites from. If given, this will be used upon 
+        unwrapping the periodic boundary conditions (PBCs).
+        Default is '' 
+    unwrap_pbcs : bool
+        Set to True to unwrap the periodic boundary conditions (PBCs) or False to leave them.
+        Default is False 
+    """
+
+    if unwrap_pbcs and os.path.isfile(dir + npz_file):
+        traj = Trajectory(filename = dir +npz_file)
+    elif not unwrap_pbcs and os.path.isfile(dir + npz_pbc_file):
+        traj = Trajectory(filename = dir +npz_pbc_file)
+    else:
+        p = IterativeVasprunParser(dir + xml_file)
+        traj = p.get_all_trajectories()
+        if  npz_pbc_file != '':
+            traj.save(dir + npz_pbc_file)
+        if unwrap_pbcs:
+            if poscar_file != '':
+                poscar = PoscarParser(dir + poscar_file)
+                pos = poscar.get_positions( coordinates = 'direct' )
+                print "Unwrapping using given initial pos"
+                traj.unwrap_pbc( init_pos = pos)
+            else:
+                traj.unwrap_pbc()
+            if npz_file != '':
+                traj.save(dir + npz_file)
+    return traj
+
+
 def ZapControlCharacters(filename):
     print "Document contains control characters that break the parser!"
     print "Trying to zap them... (this may take some time)"
@@ -76,7 +138,7 @@ def print_memory_usage():
         rss,vms = p.get_memory_info()
         print "[current physical memory usage: %.1f MB]" % (rss/1024.**2)
 
-class IterativeVasprunParser:
+class IterativeVasprunParser(object):
     """
     Parser for very large vasprun.xml files, based on iterative xml parsing.
     The functionality of this parser is limited compared to VasprunParser.
@@ -259,7 +321,7 @@ class IterativeVasprunParser:
 
 
 
-class VasprunParser:
+class VasprunParser(object):
     """
     Parser for vasprun.xml files, making use of libxml for relatively fast parsing.
     """
@@ -471,7 +533,7 @@ class VasprunParser:
 
 
 
-class FileIterator:
+class FileIterator(object):
     """
     Abstract iterator for reading files
     """
@@ -512,7 +574,7 @@ class FileIterator:
             self.file.seek(0)
 
 
-class OutcarParser:
+class OutcarParser(object):
     """
     Parser for OUTCAR files
     """
@@ -739,7 +801,7 @@ class OutcarParser:
     #    return stress
         
 
-class PoscarParser:
+class PoscarParser(object):
     """
     Parser for POSCAR files
     """
