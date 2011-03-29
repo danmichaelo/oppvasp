@@ -294,7 +294,7 @@ class BatchStep(object):
         self.files = {}
 
         # necessary? no, not really
-        self.outlist = BatchStep.output_files.values()
+        self.outlist = BatchStep.output_files.keys()
 
 
         for template_name in BatchStep.input_files.keys():
