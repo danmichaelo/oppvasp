@@ -260,10 +260,14 @@ class IterativeVasprunParser(object):
 
         if self.trajectory.num_atoms == 1:
             pos = elem.xpath("structure/varray[@name='positions']/v[%d]" % (self.atom_no+1))
+            forces = elem.xpath("structure/varray[@name='forces']/v[%d]" % (self.atom_no+1))
         else:
             pos = elem.xpath("structure/varray[@name='positions']/v")
+            forces = elem.xpath("varray[@name='forces']/v")
         pos = [[float(x) for x in ap.text.split()] for ap in pos]
+        forces = [[float(x) for x in ap.text.split()] for ap in forces]
         self.trajectory.set_positions(self.step_no, pos)
+        self.trajectory.set_forces(self.step_no, forces)
         
         e_kin = elem.xpath("energy/i[@name='kinetic']")
         if e_kin:

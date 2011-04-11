@@ -33,6 +33,7 @@ class Trajectory(object):
             self.kinetic_energy = np.zeros(self.length)
             if self.num_atoms > 0:
                 self._positions = np.zeros((num_steps, num_atoms, 3))
+                self._forces = np.zeros((num_steps, num_atoms, 3))
             self.set_timestep(timestep)
         # Set default selection to the whole trajectory:
         self.in_point = 0
@@ -47,6 +48,7 @@ class Trajectory(object):
             self.basis = self.basis[0:new_length]
             self._time = self.time[0:new_length]
             self._positions = self._positions[0:new_length]
+            self._forces = self._forces[0:new_length]
     
     def set_selection(self, in_point = 0, out_point = -1):
         """
@@ -104,7 +106,26 @@ class Trajectory(object):
         if self.num_atoms == 0:
             self.num_atoms = len(pos)
             self._positions = np.zeros((self.length, self.num_atoms, 3))
+            self._forces = np.zeros((self.length, self.num_atoms, 3))
         self._positions[step_no] = pos
+
+    @property
+    def forces(self):
+        """
+        nsteps x natoms x 3 array containing the forces on all atoms for all steps
+        """
+        return self._forces[self.in_point:self.out_point]
+
+    @forces.setter
+    def forces(self, val):
+        self._forces = val
+
+    def set_forces(self, step_no, forces):
+        if self.num_atoms == 0:
+            self.num_atoms = len(pos)
+            self._positions = np.zeros((self.length, self.num_atoms, 3))
+            self._forces = np.zeros((self.length, self.num_atoms, 3))
+        self._forces[step_no] = forces
 
     def set_basis(self, step_no, bas):
         self.basis[step_no] = bas
@@ -123,7 +144,7 @@ class Trajectory(object):
         Saves the trajectory to a *.npz binary file using numpy.savez 
         """
         np.savez(filename, basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, pos = self._positions, 
-            time = self._time, atoms = self.atoms)
+            forces = self._forces, time = self._time, atoms = self.atoms)
         print "Wrote trajectory (%d atoms, %d steps) to %s" % (self.num_atoms, self.length, filename)
 
     def load(self, filename):
@@ -136,6 +157,11 @@ class Trajectory(object):
         self.total_energy = npz['tote']
         self.kinetic_energy = npz['kine']
         self._positions = npz['pos']
+        if 'forces' in npz:
+            self._forces = npz['forces']
+        else:
+            print "This file does not contain forces"
+            self._forces = np.zeros(self._positions.shape) # waste of memory
         self._time = npz['time']
         self.length = self._positions.shape[0]
         self.num_atoms = self._positions.shape[1] 
