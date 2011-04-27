@@ -1,13 +1,12 @@
 ### OPPVASP -- Oslo Python Package for Vasp and Similar Packages
 
-OPPVASP is an attempt of a Python package wrapping together various 
-pre- and post-processing scripts for VASP and perhaps other 
-Ab Initio codes.
+OPPVASP is a wrap-up of various pre- and post-processing scripts 
+for ab initio codes, mainly VASP.
 
-Please note: The code is in a very early development stage, and no 
-parts of it can be considered stable. It may be useful for inspiration,
-but if you are looking for a good python pre-/post-processing pacakge, 
-I would recommend ASE: 
+A warning: This code should not be considered stable, and it's 
+structure is likely to change in the future. 
+If you are just looking for a good python pre-/post-processing 
+package for ab initio codes, try ASE: 
 <https://wiki.fysik.dtu.dk/ase/>.
 
 Some curent features:
