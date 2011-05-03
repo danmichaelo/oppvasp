@@ -80,6 +80,7 @@ class BatchJob(object):
         step.workdir = self.workdir
         step.vaspcmd = self.vaspcmd
         step.distributecmd = self.distributecmd
+        step.verbose = self.verbose
     
     def print_info(self):
         """
