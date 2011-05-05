@@ -194,8 +194,10 @@ class ManualBatchJob(BatchJob):
     """
     Class for carrying out a `manual' batch job, that is a batch job in which a set of 
     input files is prepared manually (without the aid of this package) and named 
-    '[FILENAME]_1', '[FILENAME]_2', et cetera, where [FILENAME] is any input file name,
-    such as 'INCAR', 'POSCAR', 'POTCAR' or 'KPOINTS' (more needed?)
+    '[FILENAME]_[INDEX]', where [FILENAME] is any input file name,
+    such as 'INCAR', 'POSCAR', 'POTCAR' or 'KPOINTS', and [INDEX] is the integer index
+    of the job step (starting at 1). [INDEX] can be prefixed by any number of zeros, 
+    so the files 'INCAR_1' and 'INCAR_001' are considered equally.
     
     Examples
     ----------
@@ -218,6 +220,8 @@ class ManualBatchJob(BatchJob):
         Please see BatchJob for help on the parameters.
         """
         BatchJob.__init__(self, **kwargs)
+
+        os.chdir(self.basedir)
         
         # Add steps to the job with increasing index, 
         # until no files with the given index are found 
@@ -268,15 +272,15 @@ class BatchStep(object):
     """
 
     input_files = {
-            'INCAR': 'INCAR_#', 
-            'POSCAR': 'POSCAR_#', 
-            'POTCAR': 'POTCAR_#',
-            'KPOINTS': 'KPOINTS_#'
+            'INCAR': 'INCAR#', 
+            'POSCAR': 'POSCAR#', 
+            'POTCAR': 'POTCAR#',
+            'KPOINTS': 'KPOINTS#'
         }
     output_files = {
-            'OUTCAR': 'OUTCAR_#',
-            'vasprun.xml': 'vasprun_#.xml',
-            'XDATCAR': 'XDATCAR_#'
+            'OUTCAR': 'OUTCAR#',
+            'vasprun.xml': 'vasprun#.xml',
+            'XDATCAR': 'XDATCAR#'
         }
 
     def __init__(self, index):
@@ -297,20 +301,41 @@ class BatchStep(object):
         # necessary? no, not really
         self.outlist = BatchStep.output_files.keys()
 
+        
+        filling = ''
+        for template_name in BatchStep.input_files.keys():
+            if index != 0:
+                f = self.re_matchfile('.',BatchStep.input_files[template_name],index)
+                if f != False:
+                    filling = f
 
         for template_name in BatchStep.input_files.keys():
             if index == 0:
                 indexed_name = template_name
             else:
-                indexed_name = BatchStep.input_files[template_name].replace('#','%d' % (index))
+                indexed_name = BatchStep.input_files[template_name].replace('#','%s%d' % (filling,index))
             self.files[template_name] = indexed_name
 
         for template_name in BatchStep.output_files.keys():
             if index == 0:
                 indexed_name = template_name
             else:
-                indexed_name = BatchStep.output_files[template_name].replace('#','%d' % (index))
+                indexed_name = BatchStep.output_files[template_name].replace('#','%s%d' % (filling,index))
             self.files[template_name] = indexed_name
+
+    def re_matchfile(self,dir,pattern,index):
+        names = os.listdir(dir)  # we are in basedir
+        re_pattern = '('+pattern.replace('#',')([_.0]*)%d(' % (index))+')'
+        rs = re.compile(re_pattern)
+        for name in names:
+            m = rs.match(name)
+            if m:
+                basename = m.group(1)
+                filling = m.group(2)
+                ending = m.group(3)
+                return filling
+        return False
+
     
     def __setitem__(self, key, val):
         if not key in (BatchStep.input_files.keys() + BatchStep.output_files.keys()):
