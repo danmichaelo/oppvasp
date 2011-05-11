@@ -95,7 +95,7 @@ class BatchJob(object):
         print "--------------"
 
 
-    def start(self, dry_run = False, first_step = 0):
+    def start(self, dry_run = False, first_step = 1):
         """
         Starts the job.
 
@@ -107,7 +107,7 @@ class BatchJob(object):
             Default is False
         first_step: int
             Step number to start at. Set this if you want to continue a job.
-            Default is 0 (the first step).
+            Default is 1 (the first step).
         """
 
         os.chdir(self.basedir)
