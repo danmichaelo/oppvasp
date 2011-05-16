@@ -1,5 +1,5 @@
 import numpy as np
-from oppvasp import get_atomic_number_from_symbol
+from oppvasp import get_atomic_number_from_symbol, direct_to_cartesian
 
 class Structure(object):
     """
@@ -16,20 +16,18 @@ class Structure(object):
     """
     
     def __init__(self, cell = [], atomtypes = [], positions = [], velocities = []):
-        self.cell = cell
-        self.atomtypes = atomtypes
-        self.positions = positions 
-        self.velocities = velocities 
+        self.set_cell(cell)
+        self.set_atomtypes(atomtypes)
+        self.set_positions(positions)
+        self.set_velocities(velocities)
    
     #------------------- Properties -------------------------------
 
-    @property
-    def cell(self):
+    def get_cell(self):
         """ 3x3 unit cell matrix """
         return self._cell
 
-    @cell.setter
-    def cell(self, cell):
+    def set_cell(self, cell):
         """ Define the unit cell using a (3,3) numpy array. """
         if type(cell).__name__ == 'list':
             self._cell = np.array(cell)
@@ -38,40 +36,35 @@ class Structure(object):
         else:
             print "Error: cell must be a list or numpy array"
     
-    @property
-    def atomtypes(self):
+    def get_atomtypes(self):
         """ 
         Array of atom numbers, having the same length as the number of 
-        atoms in the structure. If the array is set using a list of atomic symbols,
+        atoms in the structure. 
+        """
+        return self._atomtypes
+
+    def set_atomtypes(self, atoms):
+        """
+        If the array is set using a list of atomic symbols,
         it will be converted into an array of atomic numbers, so 
         the following two lines of code are equivalent:
 
-        >>> structure.atomtypes = [14,16,16]
-        >>> structure.atomtypes = ['Si','O','O']
+        >>> set_atomtypes([14,16,16])
+        >>> set_atomtypes(['Si','O','O'])
         """
-        return self._types
-
-    @atomtypes.setter
-    def atomtypes(self, atoms):
         if type(atoms).__name__ == 'ndarray':
-            self._types = np.array(atoms, dtype = 'int')
+            self._atomtypes = np.array(atoms, dtype = 'int')
         elif type(atoms).__name__ == 'list':
-            self._types = np.zeros(len(atoms), dtype = 'int')
+            self._atomtypes = np.zeros(len(atoms), dtype = 'int')
             for i in range(len(atoms)):
                 if type(atoms[i]).__name__ == 'str':
-                    self._types[i] = get_atomic_number_from_symbol(atoms[i])
+                    self._atomtypes[i] = get_atomic_number_from_symbol(atoms[i])
                 else:
-                    self._types[i] = atoms[i]
+                    self._atomtypes[i] = atoms[i]
         else:
             print "Error: atoms must be a list or array"
     
-    @property
-    def positions(self):
-        """ Atom positions array """
-        return self._positions
-
-    @positions.setter
-    def positions(self, pos):
+    def set_positions(self, pos):
         """ Define atom positions using a (n,3) numpy array. """
         if type(pos).__name__ == 'ndarray':
             self._positions = pos.copy()
@@ -80,13 +73,17 @@ class Structure(object):
         else:
             print "Error: positions must be a list or numpy array"
     
-    @property
-    def velocities(self):
+    def get_positions(self, coordinates = 'direct'):
+        if coordinates == 'direct':
+            return self._positions
+        elif coordinates == 'cartesian':
+            return direct_to_cartesian(self._positions)
+    
+    def get_velocities(self):
         """ Atom velocities array """
         return self._velocities
 
-    @velocities.setter
-    def velocities(self, vel):
+    def set_velocities(self, vel):
         if type(vel).__name__ == 'ndarray':
             self._velocities = vel.copy()
         elif type(vel).__name__ == 'list':
@@ -99,13 +96,13 @@ class Structure(object):
     def get_ase_atoms_object(self):
         """ Returns an ase.Atoms object """
         from ase import Atoms
-        return Atoms(numbers = self.atomtypes, positions = self.positions, cell = self.cell)
+        return Atoms(numbers = self._atomtypes, positions = self._positions, cell = self._cell)
 
     def set_from_ase_atoms_object(self, atoms_obj):
         """ Imports an ase.Atoms object """
         from ase import Atoms
-        self.atomtypes = atoms_obj.get_atomic_numbers()
-        self.positions = atoms_obj.get_positions()
-        self.velocities = atoms_obj.get_velocities()
-        self.cell = atoms_obj.get_cell()
+        self.set_cell(atoms_obj.get_cell())
+        self.set_atomtypes(atoms_obj.get_atomic_numbers())
+        self.set_positions(atoms_obj.get_positions())
+        self.set_velocities(atoms_obj.get_velocities())
 
