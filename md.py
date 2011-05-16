@@ -3,7 +3,7 @@
 
 import sys
 import numpy as np
-import scipy as sp
+#import scipy as sp
 
 import time
 import oppvasp
