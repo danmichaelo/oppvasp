@@ -121,8 +121,11 @@ elements = {
  109 : { 'mass' : 268, 'name': 'Meitnerium', 'symb': 'Mt' }
 }
 
-def getAtomicNumberFromSymbol(symb):
-    symb = symb.strip() # trim
+def get_atomic_number_from_symbol(atomic_symbol):
+    """
+    returns the atomic number corresponding to a given atomic symbol
+    """
+    symb = atomic_symbol.strip() # trim
     for k,v in elements.items():
         if v['symb'] == symb:
             return k

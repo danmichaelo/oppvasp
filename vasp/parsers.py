@@ -19,7 +19,7 @@ from StringIO import StringIO
 import numpy as np
 
 import oppvasp
-from oppvasp import getAtomicNumberFromSymbol
+from oppvasp import get_atomic_number_from_symbol
 from oppvasp.md import Trajectory
 from oppvasp.structure import Structure
 
@@ -186,7 +186,7 @@ class IterativeVasprunParser(object):
     def _get_atoms(self, elem):
         atoms = []
         for rc in elem.xpath("array[@name='atoms']/set/rc"):
-            atoms.append(getAtomicNumberFromSymbol(rc[0].text))
+            atoms.append(get_atomic_number_from_symbol(rc[0].text))
         return np.array(atoms, dtype=int)
 
     def _fast_iter(self, context, func):
@@ -450,7 +450,7 @@ class VasprunParser(object):
         atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
         atoms = [rc[0].text.strip() for rc in atoms]
 
-        return Structure( cell = basis, atom_types = atoms, atom_pos = pos, atom_vel = vel )
+        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel )
 
     def get_final_positions(self):
         """

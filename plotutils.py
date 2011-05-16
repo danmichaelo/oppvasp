@@ -12,7 +12,6 @@ matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 from scipy.optimize import leastsq
 
-from oppvasp import getAtomicNumberFromSymbol
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 from oppvasp.md import Trajectory, pair_correlation_function
 
