@@ -21,6 +21,7 @@ import numpy as np
 import oppvasp
 from oppvasp import getAtomicNumberFromSymbol
 from oppvasp.md import Trajectory
+from oppvasp.structure import Structure
 
 # Optional:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
@@ -235,7 +236,7 @@ class IterativeVasprunParser(object):
         """ Returns an array with the types of the atoms """
         return self.atoms
 
-    def _get_initial_positions(self,elem):
+    def _get_initial_structure(self,elem):
         basis= elem.xpath("crystal/varray[@name='basis']/v")
         basis = [[float(x) for x in p.text.split()] for p in basis]
 
@@ -251,7 +252,7 @@ class IterativeVasprunParser(object):
         """
         Returns a dictionary containing 'basis', 'positions' and 'velocities' 
         """
-        return self._find_first_instance('structure',self._get_initial_positions) 
+        return self._find_first_instance('structure',self._get_initial_structure) 
 
     def _calculation_tag_found(self, elem):
 
@@ -424,6 +425,32 @@ class VasprunParser(object):
         for i in range(num_atoms):
             pos_array[i] = [float(f) for f in all_pos[i].text.split()]
         return pos_array
+
+    def get_final_structure(self):
+        """
+        Returns the final structure as a Structure object.
+        """
+        final_struc = self.doc.xpath("/modeling/structure[@name='finalpos']")[0]
+
+        basis = final_struc.xpath("crystal/varray[@name='basis']/v")
+        basis = [[float(x) for x in p.text.split()] for p in basis]
+        
+        rec_basis = final_struc.xpath("crystal/varray[@name='rec_basis']/v")
+        rec_basis = [[float(x) for x in p.text.split()] for p in rec_basis]
+
+        vol = final_struc.xpath("crystal/i[@name='volume']")[0]
+        vol = float(vol.text)
+
+        pos = final_struc.xpath("varray[@name='positions']/v")
+        pos = [[float(x) for x in p.text.split()] for p in pos]
+
+        vel = final_struc.xpath("varray[@name='velocities']/v")
+        vel = [[float(x) for x in p.text.split()] for p in vel]
+
+        atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
+        atoms = [rc[0].text.strip() for rc in atoms]
+
+        return Structure( cell = basis, atom_types = atoms, atom_pos = pos, atom_vel = vel )
 
     def get_final_positions(self):
         """
