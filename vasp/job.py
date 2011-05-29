@@ -187,7 +187,7 @@ class SingleJob(BatchJob):
             Default is False
         """
         BatchJob.__init__(self, basedir = basedir, workdir = workdir, vaspcmd = vaspcmd, distributecmd = distributecmd, verbose = verbose)
-        self.add_step(BatchStep(0))
+        self.add_step(BatchStep(1))
 
 
 class ManualBatchJob(BatchJob):
