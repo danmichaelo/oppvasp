@@ -228,7 +228,10 @@ class ManualBatchJob(BatchJob):
         index = 1
         while True: # bad habit...
             step = ManualBatchStep(index)
-            step_necessary = False # be pessimistic 
+            if index == 1:
+                step_necessary = True     # include at least one step 
+            else:
+                step_necessary = False    # be pessimistic 
             # loop over input files (INCAR, KPOINTS, ...)
             for template_name in BatchStep.input_files.keys():
                 indexedname = step[template_name]
