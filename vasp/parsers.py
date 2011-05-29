@@ -426,31 +426,38 @@ class VasprunParser(object):
             pos_array[i] = [float(f) for f in all_pos[i].text.split()]
         return pos_array
 
-    def get_final_structure(self):
-        """
-        Returns the final structure as a Structure object.
-        """
-        final_struc = self.doc.xpath("/modeling/structure[@name='finalpos']")[0]
+    def get_named_structure(self, name):
+        """ Returns a named structure as a oppvasp.Structure object. """
 
-        basis = final_struc.xpath("crystal/varray[@name='basis']/v")
+        struc = self.doc.xpath("/modeling/structure[@name='%s']" % (name))[0]
+
+        basis = struc.xpath("crystal/varray[@name='basis']/v")
         basis = [[float(x) for x in p.text.split()] for p in basis]
         
-        rec_basis = final_struc.xpath("crystal/varray[@name='rec_basis']/v")
+        rec_basis = struc.xpath("crystal/varray[@name='rec_basis']/v")
         rec_basis = [[float(x) for x in p.text.split()] for p in rec_basis]
 
-        vol = final_struc.xpath("crystal/i[@name='volume']")[0]
+        vol = struc.xpath("crystal/i[@name='volume']")[0]
         vol = float(vol.text)
 
-        pos = final_struc.xpath("varray[@name='positions']/v")
+        pos = struc.xpath("varray[@name='positions']/v")
         pos = [[float(x) for x in p.text.split()] for p in pos]
 
-        vel = final_struc.xpath("varray[@name='velocities']/v")
+        vel = struc.xpath("varray[@name='velocities']/v")
         vel = [[float(x) for x in p.text.split()] for p in vel]
 
         atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
         atoms = [rc[0].text.strip() for rc in atoms]
 
         return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel )
+
+    def get_initial_structure(self):
+        """ Returns the initial structure as a oppvasp.Structure object. """
+        return self.get_named_structure('initialpos')
+
+    def get_final_structure(self):
+        """ Returns the final structure as a oppvasp.Structure object. """
+        return self.get_named_structure('finalpos')
 
     def get_final_positions(self):
         """
@@ -845,6 +852,8 @@ class PoscarParser(object):
     def _parse(self):
         poscarfile = open( self.filename, 'r')  # r for reading
         commentline = poscarfile.readline()
+
+        # Read unit cell
         self.scale_factor = float(poscarfile.readline()) # lattice constant
         vec1line = poscarfile.readline()
         vec2line = poscarfile.readline()
@@ -854,35 +863,56 @@ class PoscarParser(object):
         self.basis[1] = map(float,vec2line.split())
         self.basis[2] = map(float,vec3line.split())
         self.basis *= self.scale_factor
-
-        sixthline = poscarfile.readline()  # Test for vasp5 syntax
+        
+        # Read atom types / numbers
+        self.atomtypes = []
+        sixthline = poscarfile.readline()  
         try:
             dummy = int(sixthline.split()[0])
             atomnumberline = sixthline
         except:
+            self.atomtypes = sixthline.split() 
             atomnumberline = poscarfile.readline()
         self.atomnumbers = map(int,atomnumberline.split())
         self.natoms = sum(self.atomnumbers)
-        seventhline = poscarfile.readline()
 
-        if seventhline[0] == 'S' or seventhline[0] == 's':
+        # Selective dynamics?
+        self.selective_dynamics = False
+        line = poscarfile.readline()
+        if line[0].upper() == 'S':
             self.selective_dynamics = True
-            seventhline = poscarfile.readline()
-        else:
-            self.selective_dynamics = False
+            line = poscarfile.readline()
+        
+        # Direct or cartesian?
+        self.direct_coords = False
+        if line[0].upper() == 'D':
+            self.direct_coords = True
 
+        # Atomic positions
         self.positions = np.zeros((self.natoms,3))
         for j in range(self.natoms):
             line = poscarfile.readline()  # read a line
             self.positions[j] = [float(x) for x in (line.split()[0:3])]
         
         poscarfile.close()
+
+    def get_atomtypes(self):
+        if len(self.atomtypes) != len(self.atomnumbers):
+            return None
+        atomarray = []
+        for atno, attype in zip(self.atomnumbers, self.atomtypes):
+            for j in range(atno):
+                atomarray.append(attype)
+        return atomarray
+
     
-    def get_positions(self, coordinates = 'direct'):
-        if coordinates == 'direct':
-            return self.positions
-        elif coordinates == 'cartesian':
-            return oppvasp.direct_to_cartesian(self.positions)
+    def get_positions(self, coords = 'direct'):
+        if self.direct_coords == True and coords[0].lower() == 'c':
+            return oppvasp.direct_to_cartesian(self.positions, self.basis)
+        elif self.direct_coords == False and coords[0].lower() == 'd':
+            return oppvasp.cartesian_to_direct(self.positions, self.basis)
+        else:
+            return self.positions.copy()
 
     def get_basis(self):
         return self.basis
@@ -890,4 +920,8 @@ class PoscarParser(object):
     def get_scale_factor(self):
         """ lattice constant"""
         return self.scale_factor
+
+    def get_structure(self):
+        return Structure( cell = self.basis.copy(), positions = self.get_positions('direct'), atomtypes = self.get_atomtypes() )
+            
 

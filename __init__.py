@@ -144,7 +144,7 @@ def direct_to_cartesian(positions, basis):
         Array containg the lattice vectors in Cartesian coordinates
 
     """
-    print "converting to cartesian basis..."
+    #print "converting to cartesian basis..."
     t1 = time.clock()
     
     # Alternative 1
@@ -152,10 +152,16 @@ def direct_to_cartesian(positions, basis):
     
     # Alternative 2 is about 10 times faster than alternative 1
     pos = np.zeros(positions.shape)
-    i = 0
-    for p,b in zip(positions,basis):
-        pos[i] = np.dot(p,b)
-        i += 1
+    if pos.ndim == 3:
+        i = 0
+        for p,b in zip(positions,basis):
+            pos[i] = np.dot(p,b)
+            i += 1
+    elif pos.ndim == 2:
+        # single coordinate set
+        pos = np.dot(positions, basis)
+    else:
+        raise GeneralError("positions is of wrong dimensions")
     
     # Alternative 3: if the cell is static (3 x 3 instead of nsteps x 3 x 3):
     # perhaps we can use tensordot anyway? I'm not sure.
@@ -163,7 +169,7 @@ def direct_to_cartesian(positions, basis):
     
     tdiff = time.clock() - t1
     if tdiff > 1:
-        print "(that took",round(tdiff, 3),"seconds. This function should be optimized!)"
+        print "Conversion to cartesian basis took",round(tdiff, 3),"seconds. This function should be optimized!"
     # We could make a Fortran module doing the conversion... 
     #for i in range(pos.shape[0]): # axis 0   : 4 
     #    pos3[i] = np.dot(pos[i],basis[i])
@@ -174,3 +180,32 @@ def direct_to_cartesian(positions, basis):
     #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
     return pos
 
+
+def cartesian_to_direct(positions, basis):
+    """
+    Converts positions in cartesian coordinates into direct coordinates using a given basis.
+
+    Parameters
+    ----------
+    positions : num_steps x num_atoms x 3 numpy array
+        Array containing the cartesian coordinates of num_atoms atoms for num_steps steps
+    basis : num_steps x 3 x 3 numpy array
+        Array containg the lattice vectors in Cartesian coordinates
+
+    """
+    pos = np.zeros(positions.shape)
+    i = 0
+    inv_basis = np.linalg.inv(basis)
+    
+    if pos.ndim == 3:
+        # trajectory
+        for p,b in zip(positions, inv_basis):
+            pos[i] = np.dot(p,b)
+            i += 1
+    elif pos.ndim == 2:
+        # single coordinate set
+        pos = np.dot(positions, inv_basis)
+    else:
+        raise GeneralError("positions is of wrong dimensions")
+
+    return pos
