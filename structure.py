@@ -15,7 +15,7 @@ class Structure(object):
         - velocities
     """
     
-    def __init__(self, cell = [], atomtypes = [], positions = [], velocities = []):
+    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None):
         self.set_cell(cell)
         self.set_atomtypes(atomtypes)
         self.set_positions(positions)
@@ -40,6 +40,8 @@ class Structure(object):
         """ 
         Array of atom numbers, having the same length as the number of 
         atoms in the structure. 
+
+        Returns: List of strings or None
         """
         return self._atomtypes
 
@@ -56,14 +58,22 @@ class Structure(object):
             self._atomtypes = np.array(atoms, dtype = 'int')
         elif type(atoms).__name__ == 'list':
             self._atomtypes = np.zeros(len(atoms), dtype = 'int')
-            for i in range(len(atoms)):
-                if type(atoms[i]).__name__ == 'str':
-                    self._atomtypes[i] = get_atomic_number_from_symbol(atoms[i])
+            for i, atom in enumerate(atoms):
+                if type(atom).__name__ == 'str':
+                    self._atomtypes[i] = get_atomic_number_from_symbol(atom)
                 else:
-                    self._atomtypes[i] = atoms[i]
+                    self._atomtypes[i] = atom
+        elif type(atoms).__name__ == 'NoneType':
+            self._atomtypes = None
         else:
             print "Error: atoms must be a list or array"
     
+    def get_positions(self, coordinates = 'direct'):
+        if coordinates[0].lower() == 'd':
+            return self._positions.copy()
+        elif coordinates[0].lower() == 'c':
+            return direct_to_cartesian(self._positions, self._cell)
+
     def set_positions(self, pos):
         """ Define atom positions using a (n,3) numpy array. """
         if type(pos).__name__ == 'ndarray':
@@ -73,21 +83,21 @@ class Structure(object):
         else:
             print "Error: positions must be a list or numpy array"
     
-    def get_positions(self, coordinates = 'direct'):
-        if coordinates == 'direct':
-            return self._positions
-        elif coordinates == 'cartesian':
-            return direct_to_cartesian(self._positions)
     
-    def get_velocities(self):
+    def get_velocities(self, coordinates = 'direct'):
         """ Atom velocities array """
-        return self._velocities
+        if coordinates[0].lower() == 'd':
+            return self._velocities
+        elif coordinates[0].lower() == 'c':
+            return direct_to_cartesian(self._velocities, self._cell)
 
     def set_velocities(self, vel):
         if type(vel).__name__ == 'ndarray':
             self._velocities = vel.copy()
         elif type(vel).__name__ == 'list':
             self._velocities = np.array(vel)
+        elif type(vel).__name__ == 'NoneType':
+            self._velocities = None
         else:
             print "Error: velocities must be a list or numpy array"
 
