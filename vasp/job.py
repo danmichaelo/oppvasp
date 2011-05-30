@@ -86,13 +86,24 @@ class BatchJob(object):
         """
         Print out some info about the job.
         """
-        print "--------------"
+        print "-----------------------------"
         print "Basedir: %s\nWorkdir: %s" % (self.basedir,self.workdir)
-        print "Total number of runs: %d " % (len(self.steps))
-        print " Index\t Step info"
         for step in self.steps: 
-            print " %4d\t %s" % (step.index,step)
-        print "--------------"
+            print "[Step %d of %d]" % (step.index, len(self.steps))
+            prepfiles = []
+            for f in step.input_files.keys():
+                if f != step[f]:
+                    prepfiles.append("%s -> %s" % (step[f],f))
+            if len(prepfiles) != 0:
+                print "  -> Copy %s" % ', '.join(prepfiles)
+            print "  -> %s" % (step.vaspcmd)
+            prepfiles = []
+            for f in step.outlist:
+                if f != step[f]:
+                    prepfiles.append("%s -> %s" % (f, step[f]))
+            if len(prepfiles) != 0:
+                print "  -> Rename %s" % ', '.join(prepfiles)
+        print "-----------------------------"
 
 
     def start(self, dry_run = False, first_step = 1):
@@ -187,7 +198,25 @@ class SingleJob(BatchJob):
             Default is False
         """
         BatchJob.__init__(self, basedir = basedir, workdir = workdir, vaspcmd = vaspcmd, distributecmd = distributecmd, verbose = verbose)
-        self.add_step(BatchStep(1))
+
+        # Don't rename any output files:
+        BatchStep.output_files = {}
+
+        step = BatchStep(1)
+        
+        # loop over input files (INCAR, KPOINTS, ...)
+        for template_name in BatchStep.input_files.keys():
+            indexedname = step[template_name]
+            if os.path.exists(indexedname):
+                # a unique file was found. That makes this step necessary.
+                pass
+            elif os.path.exists(template_name):
+                # use index-less 'template' file
+                step[template_name] = template_name 
+            else:
+                raise Exception("Neither a file '%s' nor a file '%s' were found. I'm not sure how to deal with this situation." % (template_name, indexedname))
+           
+        self.add_step(step)
 
 
 class ManualBatchJob(BatchJob):
@@ -304,7 +333,6 @@ class BatchStep(object):
         # necessary? no, not really
         self.outlist = BatchStep.output_files.keys()
 
-        
         filling = ''
         for template_name in BatchStep.input_files.keys():
             if index != 0:
