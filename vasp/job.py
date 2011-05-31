@@ -210,9 +210,6 @@ class SingleJob(BatchJob):
         """
         BatchJob.__init__(self, basedir = basedir, workdir = workdir, vaspcmd = vaspcmd, distributecmd = distributecmd, verbose = verbose)
 
-        # Don't rename any output files:
-        BatchStep.output_files = {}
-
         step = BatchStep(1)
         
         # loop over input files (INCAR, KPOINTS, ...)
@@ -227,6 +224,13 @@ class SingleJob(BatchJob):
             else:
                 raise Exception("Neither a file '%s' nor a file '%s' were found. I'm not sure how to deal with this situation." % (template_name, indexedname))
            
+        # and over output files (OUTCAR, vasprun.xml, ..)
+        for template_name in BatchStep.output_files.keys():
+            step[template_name] = template_name 
+
+        # Don't rename any output files
+        step.outlist = {}
+
         self.add_step(step)
 
 
