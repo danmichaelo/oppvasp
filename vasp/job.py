@@ -462,7 +462,7 @@ class BatchStep(object):
         # More postprocess tasks, if any
         self.postprocess()
         for task in self.post_processing_tasks:
-            task.func(self)
+            task['func'](self)
 
     def add_post_processing_task(self, function, description):
         """
