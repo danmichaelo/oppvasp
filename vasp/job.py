@@ -103,6 +103,8 @@ class BatchJob(object):
                     prepfiles.append("%s -> %s" % (f, step[f]))
             if len(prepfiles) != 0:
                 print "  -> Rename %s" % ', '.join(prepfiles)
+            for task in step.post_processing_tasks:
+                print "  -> %s" % (task['desc'])
         print "-----------------------------"
 
 
@@ -168,6 +170,15 @@ class BatchJob(object):
         sf = open(self.summaryfile,'a')
         sf.write(summaryline+"\n")
         sf.close()
+
+    def keep(self, filename):
+        """
+        This will add <filename> to the list of files to be renamed 
+        after a step has been carried out
+        """
+        BatchStep.output_files[filename] = filename+'#'
+        for step in self.steps:
+            step._re_check_output_files()
 
 
 class SingleJob(BatchJob):
@@ -299,7 +310,8 @@ class BatchStep(object):
     
     To include CHGCAR in the list of files to be saved:
     ('#' is replaced by the '_i' where i is the index of the job)
-    >>> BatchStep.output_files['CHGCAR'] = 'CHGCAR_#'
+    >>> step = BatchStep(...)
+    >>> step.keep('CHGCAR')
 
     """
 
@@ -329,9 +341,7 @@ class BatchStep(object):
 
         self.index = index
         self.files = {}
-
-        # necessary? no, not really
-        self.outlist = BatchStep.output_files.keys()
+        self.post_processing_tasks = []
 
         filling = ''
         for template_name in BatchStep.input_files.keys():
@@ -347,11 +357,25 @@ class BatchStep(object):
                 indexed_name = BatchStep.input_files[template_name].replace('#','%s%d' % (filling,index))
             self.files[template_name] = indexed_name
 
+        self._re_check_output_files()
+
+    def _re_check_output_files(self):
+
+        # necessary? no, not really
+        self.outlist = BatchStep.output_files.keys()
+        
+        filling = ''
+        for template_name in BatchStep.input_files.keys():
+            if self.index != 0:
+                f = self.re_matchfile('.',BatchStep.input_files[template_name],self.index)
+                if f != False:
+                    filling = f
+
         for template_name in BatchStep.output_files.keys():
-            if index == 0:
+            if self.index == 0:
                 indexed_name = template_name
             else:
-                indexed_name = BatchStep.output_files[template_name].replace('#','%s%d' % (filling,index))
+                indexed_name = BatchStep.output_files[template_name].replace('#','%s%d' % (filling,self.index))
             self.files[template_name] = indexed_name
 
     def re_matchfile(self,dir,pattern,index):
@@ -437,6 +461,15 @@ class BatchStep(object):
 
         # More postprocess tasks, if any
         self.postprocess()
+        for task in self.post_processing_tasks:
+            task.func(self)
+
+    def add_post_processing_task(self, function, description):
+        """
+        Adds a function to be called after the step has been carried out
+        A reference to the step object will be sent to the function as an argument.
+        """
+        self.post_processing_tasks.append({'func':function,'desc':description})
 
 
 class ManualBatchStep(BatchStep):
