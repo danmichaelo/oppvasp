@@ -444,12 +444,16 @@ class VasprunParser(object):
         pos = [[float(x) for x in p.text.split()] for p in pos]
 
         vel = struc.xpath("varray[@name='velocities']/v")
-        vel = [[float(x) for x in p.text.split()] for p in vel]
+        if vel:
+            vel = [[float(x) for x in p.text.split()] for p in vel]
+        else:
+            # Found no velocities
+            vel = None
 
         atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
         atoms = [rc[0].text.strip() for rc in atoms]
 
-        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel )
+        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, coordinates = 'direct' )
 
     def get_initial_structure(self):
         """ Returns the initial structure as a oppvasp.Structure object. """
@@ -849,41 +853,48 @@ class PoscarParser(object):
         self.filename = poscarname
         self._parse()
 
+    def strip_comments(self, line):
+        # Comments start with "!"
+        return re.sub('!.*','',line)
+
     def _parse(self):
         poscarfile = open( self.filename, 'r')  # r for reading
+
+        # Read comment line
         commentline = poscarfile.readline()
 
-        # Read unit cell
+        # Read three unit cell lines
         self.scale_factor = float(poscarfile.readline()) # lattice constant
-        vec1line = poscarfile.readline()
-        vec2line = poscarfile.readline()
-        vec3line = poscarfile.readline()
+        vec1line = self.strip_comments(poscarfile.readline())
+        vec2line = self.strip_comments(poscarfile.readline())
+        vec3line = self.strip_comments(poscarfile.readline())
         self.basis = np.zeros((3,3))
         self.basis[0] = map(float,vec1line.split())
         self.basis[1] = map(float,vec2line.split())
         self.basis[2] = map(float,vec3line.split())
         self.basis *= self.scale_factor
         
-        # Read atom types / numbers
+        # Read the atom counts line
+        # and check for optional line containing atom types (VASP >= 5.1)
         self.atomtypes = []
-        sixthline = poscarfile.readline()  
+        sixthline = self.strip_comments(poscarfile.readline())
         try:
             dummy = int(sixthline.split()[0])
-            atomnumberline = sixthline
+            atomcountline = sixthline
         except:
-            self.atomtypes = sixthline.split() 
-            atomnumberline = poscarfile.readline()
-        self.atomnumbers = map(int,atomnumberline.split())
-        self.natoms = sum(self.atomnumbers)
+            self.atomtypes = [get_atomic_number_from_symbol(i) for i in sixthline.split()]
+            atomcountline = self.strip_comments(poscarfile.readline())
+        self.atomcounts = map(int, atomcountline.split())
+        self.natoms = sum(self.atomcounts)
 
-        # Selective dynamics?
+        # Check for optional line specifying selective dynamics
         self.selective_dynamics = False
-        line = poscarfile.readline()
+        line = self.strip_comments(poscarfile.readline())
         if line[0].upper() == 'S':
             self.selective_dynamics = True
-            line = poscarfile.readline()
+            line = self.strip_comments(poscarfile.readline())
         
-        # Direct or cartesian?
+        # Read coordinate type line (direct or cartesian)
         self.direct_coords = False
         if line[0].upper() == 'D':
             self.direct_coords = True
@@ -891,17 +902,19 @@ class PoscarParser(object):
         # Atomic positions
         self.positions = np.zeros((self.natoms,3))
         for j in range(self.natoms):
-            line = poscarfile.readline()  # read a line
+            line = self.strip_comments(poscarfile.readline())
             self.positions[j] = [float(x) for x in (line.split()[0:3])]
+            if len(self.positions[j]) != 3:
+                raise IOError('POSCAR file %s ended before all coordinates were read in' % self.filename)
         
         poscarfile.close()
-
+        
     def get_atomtypes(self):
-        if len(self.atomtypes) != len(self.atomnumbers):
+        if len(self.atomtypes) != len(self.atomcounts):
             return None
         atomarray = []
-        for atno, attype in zip(self.atomnumbers, self.atomtypes):
-            for j in range(atno):
+        for atcount, attype in zip(self.atomcounts, self.atomtypes):
+            for j in range(atcount):
                 atomarray.append(attype)
         return atomarray
 
@@ -922,6 +935,6 @@ class PoscarParser(object):
         return self.scale_factor
 
     def get_structure(self):
-        return Structure( cell = self.basis.copy(), positions = self.get_positions('direct'), atomtypes = self.get_atomtypes() )
+        return Structure( cell = self.basis.copy(), positions = self.get_positions('cart'), atomtypes = self.get_atomtypes(), coordinates = 'cart' )
             
 
