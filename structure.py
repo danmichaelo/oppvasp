@@ -1,5 +1,8 @@
+# encoding=utf-8
+
 import numpy as np
 from oppvasp import get_atomic_number_from_symbol, elements, direct_to_cartesian, cartesian_to_direct
+
 
 def unique_list(seq, idfun=None):
     # Example: unique_list(a, lambda x: x.lower())
@@ -20,7 +23,7 @@ class Structure(object):
     A Structure object defines a periodic atomic structure, keeping 
     information about its unit cell together with the types, positions 
     and possibly velocities of its atoms. Internally, coordinates are
-    stored in cartesian coordinates.
+    stored in direct coordinates, to avoid more conversion than necessary
 
     Properties:
 
@@ -30,9 +33,9 @@ class Structure(object):
         - velocities
     """
     
-    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coordinates = 'cart'):
+    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coordinates = 'direct'):
         self.set_cell(cell)
-        self.set_atomtypes(atomtypes)
+        self.set_atomtypes(np.array(atomtypes))
         self.set_positions(positions, coordinates)
         self.set_velocities(velocities, coordinates)
    
@@ -79,6 +82,8 @@ class Structure(object):
 
         Returns: List of strings or None
         """
+        if np.any(self._atomtypes < 0):
+            print "Warning: Atom type unknown for one or more atoms!"
         return self._atomtypes
 
     def set_atomtypes(self, atoms):
@@ -104,13 +109,13 @@ class Structure(object):
         else:
             print "Error: atoms must be a list or array"
     
-    def get_positions(self, coordinates = 'cart'):
+    def get_positions(self, coordinates):
         if coordinates[0].lower() == 'd':
-            return cartesian_to_direct(self._positions, self._cell)
-        elif coordinates[0].lower() == 'c':
             return self._positions.copy()
+        elif coordinates[0].lower() == 'c':
+            return direct_to_cartesian(self._positions, self._cell)
 
-    def set_positions(self, pos, coordinates = 'cart'):
+    def set_positions(self, pos, coordinates):
         """ 
         Define atom positions using a (n,3) numpy array as the first argument.
         The function assumes cartesian coordinates by default, but
@@ -123,18 +128,18 @@ class Structure(object):
             self._positions = np.array(pos)
         else:
             print "Error: positions must be a list or numpy array"
-        if coordinates[0].lower() == 'd':
-            self._positions = direct_to_cartesian(self._positions, self._cell)
+        if coordinates[0].lower() == 'c':
+            self._positions = cartesian_to_direct(self._positions, self._cell)
     
     
-    def get_velocities(self, coordinates = 'cart'):
+    def get_velocities(self, coordinates):
         """ Atom velocities array """
         if coordinates[0].lower() == 'd':
-            return cartesian_to_direct(self._velocities, self._cell)
-        elif coordinates[0].lower() == 'c':
             return self._velocities
+        elif coordinates[0].lower() == 'c':
+            return direct_to_cartesian(self._velocities, self._cell)
 
-    def set_velocities(self, vel, coordinates = 'cart'):
+    def set_velocities(self, vel, coordinates):
         if type(vel).__name__ == 'ndarray':
             self._velocities = vel.copy()
         elif type(vel).__name__ == 'list':
@@ -144,12 +149,14 @@ class Structure(object):
         else:
             print "Error: velocities must be a list or numpy array"
             self._velocities = None
-        if self._velocities != None and coordinates[0] == 'd':
-            self._velocities = direct_to_cartesian(self._velocities, self._cell)
+        if self._velocities != None and coordinates[0] == 'c':
+            self._velocities = cartesian_to_direct(self._velocities, self._cell)
 
     #------------------- Methods -------------------------------
     
     def save(self, filename, format = 'POSCAR', direct_coords = True):
+        """ Save as POSCAR """
+
         if not self.validate():
             print "ERROR: The current structure failed internal self-validation"
             return
@@ -190,29 +197,32 @@ class Structure(object):
 
     #-------------- Methods for analyzing the structure -----------
 
-    def get_supercell_positions(self, sx, sy, sz):
+    def get_supercell_positions(self, sx, sy, sz, coordinates = 'cart'):
         """ Returns a (sx,sy,sz) supercell in the form of a (sx*sy*sz,3) numpy array """
         nat = self.get_num_atoms()
         sup = np.zeros((nat*sx*sy*sz,3))
-        c = self.get_cell()
+        c = np.diag((1,1,1)) # since we use direct coordinates
         for i in range(sx):
             for j in range(sy):
                 for k in range(sz):
                     m = i*sy*sz + j*sz + k
                     sup[m*nat:(m+1)*nat] = self._positions + np.dot(c,[i, j, k])
-        return sup
+        if coordinates[0].lower() == 'c':
+            return direct_to_cartesian(sup, self._cell)
+        else:
+            return sup
 
     def get_supercell_structure(self,sx,sy,sz):
         """ Returns a (sx,sy,sz) supercell in the form of a Structure object """
         nat = self.get_num_atoms()
         c = self._cell * [sx,sy,sz]
-        p = self.get_supercell_positions(sx,sy,sz)
+        p = self.get_supercell_positions(sx,sy,sz,coordinates='cart')
         t = np.zeros(p.shape[0])
         t0 = self.get_atomtypes()
         for i in range(sx*sy*sz):
             print i*nat,i*nat+nat
             t[i*nat:i*nat+nat] = t0
-        return Structure( cell = c, positions = p, atomtypes = t)
+        return Structure( cell = c, positions = p, atomtypes = t, coordinates='cart')
 
     def get_nearest_neighbours(self, atom_no, tolerance = 0.1):
         """ Returns a list of the nearest neighbours to atom atom_no """
@@ -243,4 +253,43 @@ class Structure(object):
     def get_volume(self):
         """ Returns the volume in Angstrom^3 """
         return np.dot(self._cell[0],np.cross(self._cell[1],self._cell[2]))
+
+
+    def unwrap_pbc(self, init_pos = None, silent = False):
+        """ 
+        Unwraps periodic boundary conditions (PBCs).
+        Note that this procedure produces coordinates outside the unit cell. 
+        
+        An initial set of coordinates must be specified as a Structure object, 
+        typically originating from a POSCAR file. 
+
+        Example:
+        ----------
+        
+        >>> pp = PoscarParser('POSCAR')
+        >>> init_pos = pp.get_structure()
+        >>> vp = VasprunParser('vasprun.xml')
+        >>> fin_pos = vp.ionic_steps[-1].get_structure()
+        >>> fin_pos = fin_pos.unwrap_pbc(init_pos)
+        >>> print fin_pos - init_pos
+        
+        """
+        #if self.shape[0] != r0.shape[0]:
+        #    print "ERROR: Mismatch between number of atoms in initial and final structure! Aborting"
+        #    return
+
+        # Convert initial coordinates to final basis:
+        r0 = cartesian_to_direct(init_pos.get_positions('cart'), self._cell)
+        r = self.get_positions('direct')
+        
+        n = r.shape[0]
+        dr = r-r0
+        c = np.abs(np.array((dr-1, dr, dr+1)))
+        diff = np.array([[np.argmin(c[:,i,j]) for j in range(3)] for i in range(n)]) - 1  # (-1,0,1)
+        dr += diff
+
+        if not silent and np.max(dr) > 0.1:
+            print u"Warning: largest displacement of %.1f (direct units) is rather large..." % (np.max(dr))
+
+        self.set_positions(r0+dr, 'direct')
 

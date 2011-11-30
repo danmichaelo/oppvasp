@@ -325,6 +325,17 @@ class IterativeVasprunParser(object):
         return self.trajectory
 
 
+class IonicStep(object):
+    def __init__(self, node):
+        self._node = node
+    
+    def get_total_energy(self):
+        """Returns the total energy in electronvolt"""
+        results = self._node.xpath( "energy/i[@name='e_fr_energy']")
+        if results:
+            return float(results[0].text)
+        else:
+            raise LookupError('Value not found')
 
 class VasprunParser(object):
     """
@@ -365,6 +376,14 @@ class VasprunParser(object):
                 print "Warning: "+e.message
             sys.exit(2)
         #print_memory_usage()
+
+    @property
+    def ionic_steps(self):
+        results = self.doc.xpath( "/modeling/calculation")
+        if results:
+            return [IonicStep(r) for r in results]
+        else:
+            raise LookupError('Value not found')
     
     def get_incar_property(self, propname):
         """ 
@@ -386,14 +405,7 @@ class VasprunParser(object):
             return results[0].text
         else:
             raise LookupError('Value not found')    
-    
-    def get_total_energy(self):
-        """Returns the total energy in electronvolt"""
-        results = self.doc.xpath( "/modeling/calculation/energy/i[@name='e_fr_energy']")
-        if results:
-            return float(results[0].text)
-        else:
-            raise LookupError('Value not found')
+
     
 
     def get_sc_steps(self):
@@ -935,6 +947,6 @@ class PoscarParser(object):
         return self.scale_factor
 
     def get_structure(self):
-        return Structure( cell = self.basis.copy(), positions = self.get_positions('cart'), atomtypes = self.get_atomtypes(), coordinates = 'cart' )
+        return Structure( cell = self.basis.copy(), positions = self.get_positions('direct'), atomtypes = self.get_atomtypes(), coordinates = 'direct' )
             
 
