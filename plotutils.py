@@ -3,17 +3,17 @@
 
 # Tip: Use \showthe\columnwidth to get column width
 import numpy as np
-from matplotlib import rc
 
 import os,copy,sys
 from copy import copy
-import matplotlib
-matplotlib.use('pdf')
-import matplotlib.pyplot as plt
 from scipy.optimize import leastsq
 
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 from oppvasp.md import Trajectory, pair_correlation_function
+
+from matplotlib import rc
+import matplotlib.pyplot as plt
+# print matplotlib.__version__
 
 def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5): 
     """
@@ -49,6 +49,12 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
     fig_size = [fig_width,fig_height]
 
     rc('figure', figsize=fig_size)
+    rc('figure.subplot', **{
+        'left'   : 0.135,
+        'right'  : 0.95,
+        'bottom' : 0.145,
+        'top'    : 0.93
+        })
     rc('lines', linewidth=lw)
     rc('font', family='sans-serif', serif=['Latin Modern Roman','Palatino'], size=fontsize)
     rc('text', usetex=False)
@@ -56,6 +62,10 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
     rc('axes', labelsize=fontsize)
     rc('xtick', labelsize=fontsize_small)
     rc('ytick', labelsize=fontsize_small)
+
+    #mpl.rcParams['figure.subplot.wspace']  = 0.2    # the amount of width reserved for blank space between subplots
+    #mpl.rcParams['figure.subplot.hspace']  = 0.2    # the amount of height reserved for white space between subplots
+    
 
 def get_minmax(sets):
     mi = -1
@@ -78,7 +88,7 @@ def symmetric_running_mean(data, n):
     For each point <i> at this axis, the average is computed from the subset [i-n, i+n].
     The subset size is therefore 2*n+1.
     
-    No true srunning mean therefore exists for the first n steps and the last n steps. 
+    No true running mean therefore exists for the first n steps and the last n steps. 
     In these ranges
 
     >>> data = np.ones((100,3)) * 5 * np.random.rand(100,3)

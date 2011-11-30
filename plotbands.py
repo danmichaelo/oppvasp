@@ -220,7 +220,7 @@ class PlotBands():
 
 
 if __name__ == '__main__':
-    import oppvasp.vasp.parsebandstructure as vpb
+    #import oppvasp.vasp.parsebandstructure as vpb
     import oppvasp.espresso.parsebandstructure as epb
     
     specialKPoints = { 
@@ -234,8 +234,8 @@ if __name__ == '__main__':
     }    
     plot = PlotBands(specialKPoints)
     
-    plot.addBands(vpb.ParseBandStructure('/Users/danmichael/Dropbox/code/oppvasp/src/tests/PROCAR','/Users/danmichael/Dropbox/code/oppvasp/src/tests/OUTCAR'), 
-        fermiLevel = 6.54, color='blue', label = 'VASP', linestyle='dashed')
-    plot.addBands(epb.ParseBandStructure('/Users/danmichael/Dropbox/code/oppvasp/src/tests/si.band','/Users/danmichael/Dropbox/code/oppvasp/src/tests/si.band.out'), 
+    #plot.addBands(vpb.ParseBandStructure('/Users/danmichael/Dropbox/code/oppvasp/src/tests/PROCAR','/Users/danmichael/Dropbox/code/oppvasp/src/tests/OUTCAR'), 
+    #    fermiLevel = 6.54, color='blue', label = 'VASP', linestyle='dashed')
+    plot.addBands(epb.ParseBandStructure('../oppvasp-examples/si.band','/Users/danmichael/Dropbox/code/oppvasp/src/tests/si.band.out'), 
         fermiLevel = 6.54, color='red', label = 'Quantum Espresso')
     plot.plotAndSaveToFile(outFile = 'bands.pdf', yMin = -13, yMax = 8.0, basis='cartesian') 
