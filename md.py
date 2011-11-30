@@ -20,21 +20,22 @@ except ImportError:
 
 class Trajectory(object):
 
-    def __init__(self, num_steps = 0, num_atoms = 0, filename = '', timestep = 1., atoms = []):
+    def __init__(self, num_steps = 0, filename = '', timestep = 1., atoms = []):
         if filename != '':
             self.load(filename)
         else:
             self.atoms = atoms
             self.length = num_steps
-            self.num_atoms = num_atoms
+            self.num_atoms = atoms.shape[0]
             self._time = np.zeros(self.length)
             self.basis = [ np.zeros((3,3)) for i in range(self.length) ]
             self.total_energy = np.zeros(self.length)
             self.kinetic_energy = np.zeros(self.length)
             if self.num_atoms > 0:
-                self._positions = np.zeros((num_steps, num_atoms, 3))
-                self._forces = np.zeros((num_steps, num_atoms, 3))
+                self._positions = np.zeros((num_steps, self.num_atoms, 3))
+                self._forces = np.zeros((num_steps, self.num_atoms, 3))
             self.set_timestep(timestep)
+            print "Allocated %.2f MB" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
         # Set default selection to the whole trajectory:
         self.in_point = 0
         self.out_point = self.length
@@ -287,16 +288,16 @@ class Trajectory(object):
         return pos
 
 
-    def get_all_trajectories(self, coordinates = 'direct'):
+    def get_all_trajectories(self, coords = 'direct'):
         """
         Returns the trajectories for all the atoms in direct or cartesian coordinates
         as a numpy array of dimension (steps, atoms, 3).
         Parameters:
             - coordinates : either 'direct' or 'cartesian'
         """
-        if coordinates == 'direct':
+        if coords[0].lower() == 'd':
             return self.positions
-        elif coordinates == 'cartesian':
+        elif coords[0].lower() == 'c':
             if 'positions_cart' in dir(self):
                 return self.positions_cart
             else:
@@ -307,12 +308,15 @@ class Trajectory(object):
                 return pos
 
 
+    def get_coordinates(self, coordinates = 'direct'):
+        """
+        Returns the coordinates$r(t)$ as a numpy array of shape (#steps, #atoms, 3)
+        """
+        return self.get_all_trajectories(coordinates)
+    
     def get_displacements(self, coordinates = 'direct'):
         """
-        Returns the displacements $r(t)-r(0)$ as a numpy array:
-            axis[0] = time, 
-            axis[1] = atom_no,
-            axis[2] = coordinate no (x,y,z)
+        Returns the displacements $r(t)-r(0)$ as a numpy array of shape (#steps, #atoms, 3)
         """
         pos = self.get_all_trajectories(coordinates)
         return pos - pos[0]
