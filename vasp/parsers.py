@@ -101,7 +101,7 @@ def read_trajectory(dir = '', xml_file ='vasprun.xml', npz_pbc_file = 'trajector
         if unwrap_pbcs:
             if poscar_file != '':
                 poscar = PoscarParser(dir + poscar_file)
-                pos = poscar.get_positions( coordinates = 'direct' )
+                pos = poscar.get_positions( coords = 'direct' )
                 print "Unwrapping using given initial pos"
                 traj.unwrap_pbc( init_pos = pos)
             else:
@@ -465,7 +465,7 @@ class VasprunParser(object):
         atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
         atoms = [rc[0].text.strip() for rc in atoms]
 
-        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, coordinates = 'direct' )
+        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, coords = 'direct' )
 
     def get_initial_structure(self):
         """ Returns the initial structure as a oppvasp.Structure object. """
@@ -947,6 +947,6 @@ class PoscarParser(object):
         return self.scale_factor
 
     def get_structure(self):
-        return Structure( cell = self.basis.copy(), positions = self.get_positions('direct'), atomtypes = self.get_atomtypes(), coordinates = 'direct' )
+        return Structure( cell = self.basis.copy(), positions = self.get_positions('direct'), atomtypes = self.get_atomtypes(), coords = 'direct' )
             
 

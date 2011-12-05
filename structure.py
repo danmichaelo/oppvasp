@@ -33,11 +33,11 @@ class Structure(object):
         - velocities
     """
     
-    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coordinates = 'direct'):
+    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coords = 'direct'):
         self.set_cell(cell)
         self.set_atomtypes(np.array(atomtypes))
-        self.set_positions(positions, coordinates)
-        self.set_velocities(velocities, coordinates)
+        self.set_positions(positions, coords)
+        self.set_velocities(velocities, coords)
    
     def get_num_atoms(self):
         """ Returns the number of atoms """
@@ -109,13 +109,13 @@ class Structure(object):
         else:
             print "Error: atoms must be a list or array"
     
-    def get_positions(self, coordinates):
-        if coordinates[0].lower() == 'd':
+    def get_positions(self, coords):
+        if coords[0].lower() == 'd':
             return self._positions.copy()
-        elif coordinates[0].lower() == 'c':
+        elif coords[0].lower() == 'c':
             return direct_to_cartesian(self._positions, self._cell)
 
-    def set_positions(self, pos, coordinates):
+    def set_positions(self, pos, coords):
         """ 
         Define atom positions using a (n,3) numpy array as the first argument.
         The function assumes cartesian coordinates by default, but
@@ -128,18 +128,18 @@ class Structure(object):
             self._positions = np.array(pos)
         else:
             print "Error: positions must be a list or numpy array"
-        if coordinates[0].lower() == 'c':
+        if coords[0].lower() == 'c':
             self._positions = cartesian_to_direct(self._positions, self._cell)
     
     
-    def get_velocities(self, coordinates):
+    def get_velocities(self, coords):
         """ Atom velocities array """
-        if coordinates[0].lower() == 'd':
+        if coords[0].lower() == 'd':
             return self._velocities
-        elif coordinates[0].lower() == 'c':
+        elif coords[0].lower() == 'c':
             return direct_to_cartesian(self._velocities, self._cell)
 
-    def set_velocities(self, vel, coordinates):
+    def set_velocities(self, vel, coords):
         if type(vel).__name__ == 'ndarray':
             self._velocities = vel.copy()
         elif type(vel).__name__ == 'list':
@@ -149,7 +149,7 @@ class Structure(object):
         else:
             print "Error: velocities must be a list or numpy array"
             self._velocities = None
-        if self._velocities != None and coordinates[0] == 'c':
+        if self._velocities != None and coords[0] == 'c':
             self._velocities = cartesian_to_direct(self._velocities, self._cell)
 
     #------------------- Methods -------------------------------
@@ -197,7 +197,7 @@ class Structure(object):
 
     #-------------- Methods for analyzing the structure -----------
 
-    def get_supercell_positions(self, sx, sy, sz, coordinates = 'cart'):
+    def get_supercell_positions(self, sx, sy, sz, coords= 'cart'):
         """ Returns a (sx,sy,sz) supercell in the form of a (sx*sy*sz,3) numpy array """
         nat = self.get_num_atoms()
         sup = np.zeros((nat*sx*sy*sz,3))
@@ -207,7 +207,7 @@ class Structure(object):
                 for k in range(sz):
                     m = i*sy*sz + j*sz + k
                     sup[m*nat:(m+1)*nat] = self._positions + np.dot(c,[i, j, k])
-        if coordinates[0].lower() == 'c':
+        if coords[0].lower() == 'c':
             return direct_to_cartesian(sup, self._cell)
         else:
             return sup
@@ -216,13 +216,13 @@ class Structure(object):
         """ Returns a (sx,sy,sz) supercell in the form of a Structure object """
         nat = self.get_num_atoms()
         c = self._cell * [sx,sy,sz]
-        p = self.get_supercell_positions(sx,sy,sz,coordinates='cart')
+        p = self.get_supercell_positions(sx,sy,sz,coords='cart')
         t = np.zeros(p.shape[0])
         t0 = self.get_atomtypes()
         for i in range(sx*sy*sz):
             print i*nat,i*nat+nat
             t[i*nat:i*nat+nat] = t0
-        return Structure( cell = c, positions = p, atomtypes = t, coordinates='cart')
+        return Structure( cell = c, positions = p, atomtypes = t, coords='cart')
 
     def get_nearest_neighbours(self, atom_no, tolerance = 0.1):
         """ Returns a list of the nearest neighbours to atom atom_no """

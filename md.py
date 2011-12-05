@@ -273,17 +273,17 @@ class Trajectory(object):
         return geo
 
     
-    def get_single_particle_trajectory(self, atom_no, coordinates = 'direct'):
+    def get_single_particle_trajectory(self, atom_no, coords = 'direct'):
         """
         Returns the trajectory of a single atom in direct or cartesian coordinates
         as a numpy array of dimension (steps, 3).
 
         Parameters
         ----------
-            coordinates : either 'direct' or 'cartesian'
+            coords : either 'direct' or 'cartesian'
         """
         pos = self.positions[:,atom_no,:]
-        if coordinates == 'cartesian':
+        if coords == 'cartesian':
             pos = oppvasp.direct_to_cartesian(pos, self.basis)
         return pos
 
@@ -293,7 +293,7 @@ class Trajectory(object):
         Returns the trajectories for all the atoms in direct or cartesian coordinates
         as a numpy array of dimension (steps, atoms, 3).
         Parameters:
-            - coordinates : either 'direct' or 'cartesian'
+            - coords : either 'direct' or 'cartesian'
         """
         if coords[0].lower() == 'd':
             return self.positions
@@ -308,43 +308,43 @@ class Trajectory(object):
                 return pos
 
 
-    def get_coordinates(self, coordinates = 'direct'):
+    def get_coordinates(self, coords = 'direct'):
         """
         Returns the coordinates$r(t)$ as a numpy array of shape (#steps, #atoms, 3)
         """
-        return self.get_all_trajectories(coordinates)
+        return self.get_all_trajectories(coords)
     
-    def get_displacements(self, coordinates = 'direct'):
+    def get_displacements(self, coords = 'direct'):
         """
         Returns the displacements $r(t)-r(0)$ as a numpy array of shape (#steps, #atoms, 3)
         """
-        pos = self.get_all_trajectories(coordinates)
+        pos = self.get_all_trajectories(coords)
         return pos - pos[0]
 
 
-    def get_displacements_squared(self, coordinates = 'direct'):
+    def get_displacements_squared(self, coords = 'direct'):
         """
         Returns the displacements squared $[r(t)-r(0)]^2), as an numpy array:
             axis[0] = time, 
             axis[1] = atom_no,
         $ \Delta r_i^2(t) = (r_i(t)-r_i(0))^2 $
         Parameters:
-         - coordinates : either 'direct' or 'cartesian'
+         - coords : either 'direct' or 'cartesian'
         """
-        disp = self.get_displacements(coordinates)
+        disp = self.get_displacements(coords)
         dispsq  = disp[:,:,0]**2 + disp[:,:,1]**2 + disp[:,:,2]**2
         return dispsq
         # transpose to get axis[0] = at no., axis[1] = time
 
-    def get_velocities(self, coordinates = 'direct', algorithm = 'naive'):
+    def get_velocities(self, coords = 'direct', algorithm = 'naive'):
         """
         Returns velocities as a (nsteps,natom,3) array
         Parameters:
-         - coordinates: 'direct' returns velocities in [direct coordinates]/[timestep]
+         - coords : 'direct' returns velocities in [direct coordinates]/[timestep]
                         'cartesian' returns velocities in Å/s
         """
         timestep = self.time[1]-self.time[0]
-        pos = self.get_all_trajectories(coordinates)
+        pos = self.get_all_trajectories(coords)
         vel = np.zeros(pos.shape)
 
         pbar = ProgressBar(widgets=['Calculating velocities...',Percentage()], maxval = vel.shape[0]).start()
