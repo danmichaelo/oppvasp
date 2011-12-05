@@ -8,6 +8,8 @@ import numpy as np
 import time
 import oppvasp
 
+from oppvasp.structure import Structure
+
 # Status of optional Python modules:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
 try:
@@ -234,6 +236,16 @@ class Trajectory(object):
         if imported['progressbar']:
             pbar.finish()
 
+    def get_snapshot(self, frame):
+        """
+        Returns a Structure object for a single frame. This can in turn be saved.
+
+        Parameters:
+          - frame      : the frame id (int)
+
+        """
+        return Structure( cell = self.basis[frame], positions = self.positions[frame], coords = 'direct', atomtypes = self.atoms )
+
     def add_atom(self, positions):
         """
         Adds an atom to the trajectory. The new atom must have the same data length as the existing atoms.
@@ -410,6 +422,15 @@ class Trajectory(object):
         pbar.finish()
         return occupancies, inhabitants
 
+
+
+
+
+#
+#
+#
+# !!! NOT TESTED
+#
 def pair_correlation_function(x,y,z,S,rMax,dr):
     """Compute the three-dimensional pair correlation function for a set of
     spherical particles contained in a cube with side length S.  This simple 
