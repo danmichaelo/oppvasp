@@ -424,6 +424,9 @@ class BatchStep(object):
         """
         pass
 
+    def get_name(self):
+        return str(self.index)
+
     def execute(self): 
         """
         This method performs the job defined by this BatchStep object:
