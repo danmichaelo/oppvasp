@@ -505,7 +505,17 @@ class ManualBatchStep(BatchStep):
         into files with correct filenames for use with VASP (like 'INCAR').
         """
         for f in BatchStep.input_files.keys():
-            os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
+            if self[f] != f:
+                shutil.copy2(self[f],f)
+            #os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
+
+    def postprocess(self):
+        """
+        Cleans up
+        """
+        for f in BatchStep.input_files.keys():
+            if f != self[f]:
+                os.unlink(f) # if we copy, say INCAR.1 to INCAR before a run, remove INCAR afterwards
 
     def get_name(self):
         return str(self.index)
