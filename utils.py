@@ -94,11 +94,6 @@ def query_yes_no(question, default="yes"):
             sys.stdout.write("Please respond with 'yes' or 'no' "\
                              "(or 'y' or 'n').\n")
 
-        sys.stdout.write("\nSaving band structure to %s... " % outFile)
-        sys.stdout.flush()
-        plt.savefig(outFile)
-        sys.stdout.write("done!\n\n")
-
 def OpenVaspRunXml():
     filename = 'vasprun.xml'
     if len(sys.argv) > 0:
