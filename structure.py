@@ -256,6 +256,15 @@ class Structure(object):
         """ Returns the volume in Angstrom^3 """
         return np.dot(self._cell[0],np.cross(self._cell[1],self._cell[2]))
 
+    def wrap_pbc(self):
+        """
+        Wraps coordinates outside the unit cell into it
+        """
+        r = self.get_positions('direct')
+        # Minimum image convention (may not be appropriate for extreme cell geometries!!)
+        rc = r - (2*r-1).astype(np.int)
+        self.set_positions(rc, 'direct')
+    
 
     def unwrap_pbc(self, init_pos = None, silent = False):
         """ 
