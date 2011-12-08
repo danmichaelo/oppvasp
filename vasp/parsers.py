@@ -462,8 +462,12 @@ class VasprunParser(object):
             # Found no velocities
             vel = None
 
-        atoms = self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc")
-        atoms = [rc[0].text.strip() for rc in atoms]
+
+        atoms = []
+        for rc in self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc"):
+            atoms.append(get_atomic_number_from_symbol(rc[0].text.strip()))
+        #atoms = [rc[0].text.strip() for rc in atoms]
+        atoms = np.array(atoms, dtype=int)
 
         return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, coords = 'direct' )
 
