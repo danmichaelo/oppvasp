@@ -178,8 +178,10 @@ class Structure(object):
             atomline2 += "  %d" % (mult) 
         f.write(atomline1+'\n'+atomline2+'\n')
         f.write('Direct\n' if direct_coords else 'Cartesian\n')
-        for atomvec in self.get_positions('direct' if direct_coords else 'cart'):
-            f.write( "   % .16f   % .16f   % .16f\n" % tuple(atomvec))
+        pos = self.get_positions('direct' if direct_coords else 'cart')
+        for at in atms_list:
+            for atomvec in pos[(at == atom_numbers)]:
+                f.write( "   % .16f   % .16f   % .16f\n" % tuple(atomvec))
         f.close()
 
     def get_ase_atoms_object(self):
