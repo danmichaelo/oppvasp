@@ -12,7 +12,9 @@ import os,shutil,sys,re,datetime
 import numpy as np
 import glob # for finding files using wildcards
 from operator import itemgetter
+from time import strftime
 from parsers import VasprunParser, OutcarParser, PoscarParser, IterativeVasprunParser
+
 __docformat__ = "restructuredtext en"
 
 
@@ -55,6 +57,7 @@ class BatchJob(object):
         >>> job.start(dry_run = false)
 
         """
+        print ">>> BatchJob initiated at %s" % strftime("%Y-%m-%d %H:%M:%S")
         self.verbose = verbose
         self.basedir = basedir
         if self.basedir == '':
@@ -90,6 +93,7 @@ class BatchJob(object):
         print "Basedir: %s\nWorkdir: %s" % (self.basedir,self.workdir)
         for step in self.steps: 
             print "[Step %d of %d]" % (step.index, len(self.steps))
+            step.preprocess_info()
             prepfiles = []
             for f in step.input_files.keys():
                 if f != step[f]:
@@ -135,6 +139,7 @@ class BatchJob(object):
         
         # Loop through the batch steps 
         for step in self.steps:
+            print ">>> BatchJob step %i started at %s" % (step.index, strftime("%Y-%m-%d %H:%M:%S"))
 
             # Run BatchStep.execute
             if not dry_run and step.index >= first_step:
@@ -144,13 +149,19 @@ class BatchJob(object):
             if self.summaryfile != '' and os.path.isfile(self.summaryfile):
                 self.update_summaryfile(step)
 
+        print ">>> BatchJob complete at %s" % strftime("%Y-%m-%d %H:%M:%S")
+
     def update_summaryfile(self, step):
         if not os.path.isfile(step['OUTCAR']):
             print "No output file '%s' to analyze" % (step['OUTCAR'])
             return
-        poscar = PoscarParser(step['POSCAR'])
-        outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
-        outcar.readItAll()
+        try:
+            poscar = PoscarParser(step['POSCAR'])
+            outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
+            outcar.readItAll()
+        except:
+            print "BatchJob: Failed to parse output files from VASP. Did VASP crash?"
+            sys.exit(1)
         
         try:
             pressure = "%.4f" % outcar.get_max_pressure()
@@ -279,7 +290,9 @@ class ManualBatchJob(BatchJob):
             # loop over input files (INCAR, KPOINTS, ...)
             for template_name in BatchStep.input_files.keys():
                 indexedname = step[template_name]
-                if os.path.exists(indexedname):
+                if template_name == 'POSCAR':
+                    pass
+                elif os.path.exists(indexedname):
                     # a unique file was found. That makes this step necessary.
                     step_necessary = True
                 elif len(self.steps) > 0:
@@ -288,8 +301,7 @@ class ManualBatchJob(BatchJob):
                     step[template_name] = previous_step_file
                 elif os.path.exists(template_name):
                     # use index-less 'template' file
-                    if template_name != 'POSCAR': # POSCARs should always be indexed
-                        step[template_name] = template_name 
+                    step[template_name] = template_name
                 else:
                     raise Exception("Neither a file '%s' nor a file '%s' were found. I'm not sure how to deal with this situation." % (template_name, indexedname))
            
@@ -330,11 +342,11 @@ class BatchStep(object):
             'OUTCAR': 'OUTCAR#',
             'vasprun.xml': 'vasprun#.xml',
             'XDATCAR': 'XDATCAR#'
-        } # no need to add CONTCAR, as they are always saved
+        } 
 
     def __init__(self, index):
         """
-        Create a Job object. 
+        Create a BatchStep object. 
 
         Parameters
         ----------
@@ -412,6 +424,12 @@ class BatchStep(object):
 
     def __str__(self):
         return " ".join(self.files.values())
+    
+    def preprocess_info(self):
+        """
+        This method is called from the print_info method
+        """
+        pass
 
     def preprocess(self):
         """
@@ -500,19 +518,29 @@ class ManualBatchStep(BatchStep):
         """
         BatchStep.__init__(self, index)
 
+    def preprocess_info(self):
+        if not os.path.isfile(self['POSCAR']):
+            if self.index == 1:
+                print '  -> Copy POSCAR ->',self['POSCAR']
+            else:
+                print '  -> Copy CONTCAR ->',self['POSCAR']
+
     def preprocess(self):
         """
         Copies the input files for the current BatchStep object (like 'INCAR.1') 
         into files with correct filenames for use with VASP (like 'INCAR').
         """
-        if os.path.isfile('CONTCAR'):
-            shutil.copy2('CONTCAR', self[f]) # for archival
-            shutil.copy2('CONTCAR', f)  # for use
+        if not os.path.isfile(self['POSCAR']):
+            if self.index == 1:
+                shutil.copy2('POSCAR',self['POSCAR'])
+                print "Copying POSCAR to %s" % self['POSCAR']
+            else:
+                shutil.copy2('CONTCAR',self['POSCAR'])
+                print "Copying CONTCAR to %s" % self['POSCAR']
         for f in BatchStep.input_files.keys():
             if self[f] != f:
                 shutil.copy2(self[f],f)
             #os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
-
     def postprocess(self):
         """
         Cleans up
