@@ -558,14 +558,16 @@ class VasprunParser(object):
         """
         Returns the max force acting on any atom
         """
-        forces = self.doc.xpath( "/modeling/calculation/varray[@name='forces']/v")
-        max_force = 0.
-        for f in forces:
-            force = np.array(f.text.split())
+        forces = self.doc.xpath( "/modeling/calculation[last()]/varray[@name='forces']/v")
+        max_force = 0.0
+        max_force_atm = -1
+        for i,f in enumerate(forces):
+            force = np.array([float(n) for n in f.text.split()])
             force_norm = np.sqrt(np.dot(force,force))
             if force_norm > max_force:
                 max_force = force_norm
-        return max_force
+                max_force_atm = i
+        return (max_force,max_force_atm)
 
     def get_cpu_time(self):
         """
