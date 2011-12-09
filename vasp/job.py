@@ -288,7 +288,8 @@ class ManualBatchJob(BatchJob):
                     step[template_name] = previous_step_file
                 elif os.path.exists(template_name):
                     # use index-less 'template' file
-                    step[template_name] = template_name 
+                    if template_name != 'POSCAR': # POSCARs should always be indexed
+                        step[template_name] = template_name 
                 else:
                     raise Exception("Neither a file '%s' nor a file '%s' were found. I'm not sure how to deal with this situation." % (template_name, indexedname))
            
@@ -329,7 +330,7 @@ class BatchStep(object):
             'OUTCAR': 'OUTCAR#',
             'vasprun.xml': 'vasprun#.xml',
             'XDATCAR': 'XDATCAR#'
-        }
+        } # no need to add CONTCAR, as they are always saved
 
     def __init__(self, index):
         """
@@ -504,6 +505,9 @@ class ManualBatchStep(BatchStep):
         Copies the input files for the current BatchStep object (like 'INCAR.1') 
         into files with correct filenames for use with VASP (like 'INCAR').
         """
+        if os.path.isfile('CONTCAR'):
+            shutil.copy2('CONTCAR', self[f]) # for archival
+            shutil.copy2('CONTCAR', f)  # for use
         for f in BatchStep.input_files.keys():
             if self[f] != f:
                 shutil.copy2(self[f],f)
