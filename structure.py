@@ -35,7 +35,7 @@ class Structure(object):
     
     def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coords = 'direct'):
         self.set_cell(cell)
-        self.set_atomtypes(np.array(atomtypes))
+        self.set_atomtypes(atomtypes)
         self.set_positions(positions, coords)
         self.set_velocities(velocities, coords)
    
@@ -82,8 +82,8 @@ class Structure(object):
 
         Returns: List of strings or None
         """
-        if np.any(self._atomtypes < 0):
-            print "Warning: Atom type unknown for one or more atoms!"
+        #if np.any(self._atomtypes < 0):
+        #    print "Warning: Atom type unknown for one or more atoms!"
         return self._atomtypes
 
     def set_atomtypes(self, atoms):
@@ -161,7 +161,10 @@ class Structure(object):
             print "ERROR: The current structure failed internal self-validation"
             return
 
-        f = open(filename, 'w')
+        if isinstance(filename, file):
+            f = filename
+        else:
+            f = open(filename, 'w')
         f.write('Saved ---\n')
         f.write('1.0\n')
         for cellvec in self.get_cell():
@@ -173,10 +176,16 @@ class Structure(object):
         atms_list = unique_list(atom_numbers)
         atms_mult = [(at == atom_numbers).sum() for at in atms_list]
         
+        typesknown = True
         for mult,atomtyp in zip(atms_mult,atms_list):
-            atomline1 += "  %s" % (elements[atomtyp]['symb']) 
+            if atomtyp < 0:
+                typesknown = False
+            else:
+                atomline1 += "  %s" % (elements[atomtyp]['symb']) 
             atomline2 += "  %d" % (mult) 
-        f.write(atomline1+'\n'+atomline2+'\n')
+        if typesknown:
+            f.write(atomline1+'\n')
+        f.write(atomline2+'\n')
         f.write('Direct\n' if direct_coords else 'Cartesian\n')
         pos = self.get_positions('direct' if direct_coords else 'cart')
         for at in atms_list:

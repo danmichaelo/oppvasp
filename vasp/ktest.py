@@ -1,5 +1,4 @@
 import os,sys,re
-from oppvasp import utils
 from batchjob import BatchJob, ManualBatchStep
 
 class KTest(BatchJob):

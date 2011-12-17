@@ -1,6 +1,51 @@
 
-import math, sys, os
-from lxml import etree
+import sys, os
+import numpy as np
+
+try:
+    from lxml import etree
+except:
+    print "Warning: lxml python package not found"
+
+def get_pairs(n):
+    """
+        Returns a list of all n*(n-1)/2 unordered pairs of numbers 0...n-1
+        as a (n*(n-1)/2, 2) numpy array.
+
+        Example: n = 5. 
+            # pairs: n(n+1)/2 = 10
+
+            j | n-1-j | jsum  | indices | i,j pairs
+            --|-------|-------|---------|----------------
+            0 |   4   |  0    | 0:3     | 1,0 2,0 3,0 4,0
+            1 |   3   |  3    | 4:6     | 2,1 3,1 4,1
+            2 |   2   |  5    | 7:8     | 3,2 4,2
+            3 |   1   |  6    | 9:9     | 4,3 
+
+    """
+    pairs = np.empty((n*(n-1)/2,2), dtype = int)
+    m = n-1
+    for j in xrange(m):
+        # jsum = sum(n-1-j, n-2)
+        jsum = j*(2*n-j-3)/2
+        #print jsum
+        #print "j=%d" % j, " =>",j+isum,j+isum+(n-1-j)
+        #print pairs[j+isum:j+isum+(n-1-j),1]
+        pairs[jsum+j:jsum+m,1] = j
+        pairs[jsum+j:jsum+m,0] = range(j+1,n)
+    return pairs
+
+def unitcell_components(cell):
+    A = cell[0]
+    B = cell[1]
+    C = cell[2]
+    a = np.sqrt(np.dot(A,A))
+    b = np.sqrt(np.dot(B,B))
+    c = np.sqrt(np.dot(C,C))
+    alpha = np.arccos( np.dot(B,C) / (b*c) ) * 360 / (2.*np.pi)
+    beta  = np.arccos( np.dot(C,A) / (c*a) ) * 360 / (2.*np.pi)
+    gamma = np.arccos( np.dot(A,B) / (a*b) ) * 360 / (2.*np.pi)
+    return a,b,c,alpha,beta,gamma
 
 def which(program):
     """
@@ -22,7 +67,7 @@ def which(program):
 
     return None
 
-
+# DEPRECATED
 # since we cannot rely on numpy being available, we
 # define a floating point range function
 # From:
@@ -61,6 +106,40 @@ def frange6(*args):
         yield v
         v += step
 
+class FileType(object):
+    """
+    Copied from argparse, but adding a warning before overwriting files!
+    """
+
+    def __init__(self, mode='r', bufsize=-1):
+        self._mode = mode
+        self._bufsize = bufsize
+
+    def __call__(self, string):
+        # the special argument "-" means sys.std{in,out}
+        if string == '-':
+            if 'r' in self._mode:
+                return _sys.stdin
+            elif 'w' in self._mode:
+                return _sys.stdout
+            else:
+                msg = _('argument "-" with mode %r') % self._mode
+                raise ValueError(msg)
+
+        # all other arguments are used as file names
+        if self._mode == 'w' and os.path.exists(string):
+            if query_yes_no("The file %s exists. Do you want to overwrite it?" % string) == "no":
+                sys.exit(1)
+        try:
+            return open(string, self._mode, self._bufsize)
+        except IOError as e:
+            message = _("can't open '%s': %s")
+            raise ArgumentTypeError(message % (string, e))
+
+    def __repr__(self):
+        args = self._mode, self._bufsize
+        args_str = ', '.join(repr(arg) for arg in args if arg != -1)
+        return '%s(%s)' % (type(self).__name__, args_str)
 
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via raw_input() and return their answer.

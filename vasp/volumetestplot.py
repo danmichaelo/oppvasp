@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from scitools.std import seq
 from matplotlib import rc
 import glob # for finding files using wildcards
-from oppvasp.utils import query_yes_no
+from oppvasp.util import query_yes_no
 from oppvasp.vasp.parsers import VasprunParser
 __docformat__ = "restructuredtext en"
 

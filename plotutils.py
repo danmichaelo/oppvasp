@@ -9,7 +9,7 @@ from copy import copy
 from scipy.optimize import leastsq
 
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
-from oppvasp.md import Trajectory, pair_correlation_function
+from oppvasp.md import Trajectory 
 
 from matplotlib import rc
 import matplotlib.pyplot as plt
@@ -50,9 +50,9 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
 
     rc('figure', figsize=fig_size)
     rc('figure.subplot', **{
-        'left'   : 0.135,
+        'left'   : 0.15,
         'right'  : 0.95,
-        'bottom' : 0.145,
+        'bottom' : 0.15,
         'top'    : 0.93
         })
     rc('lines', linewidth=lw)

@@ -166,6 +166,9 @@ class IterativeVasprunParser(object):
         # read beginning of file to find number of ionic steps (NSW) and timestep (POTIM)
         self.params = self._find_first_instance('parameters', self._params_tag_found)
         self.nsw = int(self.params.xpath("separator[@name='ionic']/i[@name='NSW']")[0].text)
+        if self.nsw == 0:
+            print "Note: This file contains no ionic motion (NSW=0)."
+            self.nsw = 1 # to read the static structure
 
         # should make a try clause
         self.potim = float(self.params.xpath("separator[@name='ionic']/i[@name='POTIM']")[0].text)
@@ -694,7 +697,7 @@ class OutcarParser(object):
         """
         self.file.reset()
         numsteps = self.config['NSW']
-        print " extracting ionic step data for %.0f steps..." % (numsteps)
+        print " extracting ionic step data for %d steps..." % (numsteps)
         a = {
             'time': np.arange(1,numsteps+1),
             'energy': {
@@ -866,18 +869,23 @@ class PoscarParser(object):
     Parser for POSCAR files
     """
     
-    def __init__(self, poscarname='POSCAR'):
+    def __init__(self, poscar='POSCAR', silent=False):
         self.selective_dynamics = False
-        self.filename = poscarname
-        self._parse()
+        if isinstance(poscar, file):
+            self._file = poscar
+            self.filename = poscar.name
+        else:
+            self.filename = poscar 
+            self._file = open( self.filename, 'r')
+        self._parse(silent)
 
     def strip_comments(self, line):
         # Comments start with "!"
         return re.sub('!.*','',line)
 
-    def _parse(self):
-        poscarfile = open( self.filename, 'r')  # r for reading
+    def _parse(self, silent=False):
 
+        poscarfile = self._file
         # Read comment line
         commentline = poscarfile.readline()
 
@@ -900,10 +908,16 @@ class PoscarParser(object):
             dummy = int(sixthline.split()[0])
             atomcountline = sixthline
         except:
-            self.atomtypes = [get_atomic_number_from_symbol(i) for i in sixthline.split()]
+            self.atomtypes = np.array([get_atomic_number_from_symbol(i) for i in sixthline.split()])
             atomcountline = self.strip_comments(poscarfile.readline())
         self.atomcounts = map(int, atomcountline.split())
         self.natoms = sum(self.atomcounts)
+        if len(self.atomtypes) == 0:
+            if not silent:
+                print "Note: Atom types are not specified in '%s'" % self.filename
+            # assign negastive numbers, so we can still differentiate between the different types
+            # (this will probably cause som nasty bugs at some time...)
+            self.atomtypes = np.arange(-1,-len(self.atomcounts)-1,-1) 
 
         # Check for optional line specifying selective dynamics
         self.selective_dynamics = False

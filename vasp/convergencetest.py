@@ -1,7 +1,7 @@
 import os,shutil,sys,re,math
 from job import BatchJob, BatchStep, BatchJobDataExtractor
 import numpy as np
-from oppvasp.utils import query_yes_no
+from oppvasp.util import query_yes_no
 __docformat__ = "restructuredtext en"
 
 class ConvergenceTest(BatchJob):
