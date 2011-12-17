@@ -8,7 +8,9 @@ import numpy as np
 import time
 import oppvasp
 
+from oppvasp import elements
 from oppvasp.structure import Structure
+from oppvasp.util import unitcell_components
 
 # Status of optional Python modules:
 imported = { 'progressbar' : False, 'psutil' : False, 'lxml' : False }
@@ -27,15 +29,13 @@ class Trajectory(object):
             self.load(filename)
         else:
             self.atoms = atoms
-            self.length = num_steps
-            self.num_atoms = atoms.shape[0]
-            self._time = np.zeros(self.length)
-            self.basis = [ np.zeros((3,3)) for i in range(self.length) ]
+            #self.num_atoms = atoms.shape[0]
+            self._time = np.zeros(num_steps)
+            self.basis = np.zeros((self.length,3,3))
             self.total_energy = np.zeros(self.length)
             self.kinetic_energy = np.zeros(self.length)
-            if self.num_atoms > 0:
-                self._positions = np.zeros((num_steps, self.num_atoms, 3))
-                self._forces = np.zeros((num_steps, self.num_atoms, 3))
+            self._positions = np.zeros((num_steps, self.num_atoms, 3))
+            self._forces = np.zeros((num_steps, self.num_atoms, 3))
             self.set_timestep(timestep)
             print "Allocated %.2f MB" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
         # Set default selection to the whole trajectory:
@@ -45,11 +45,11 @@ class Trajectory(object):
     def update_length(self, new_length):
         if new_length < self.length:
             print "Stripping %d empty steps" % (self.length - new_length)
-            self.length = new_length 
+            #self.length = new_length 
+            self._time = self.time[0:new_length] # updates length
             self.total_energy = self.total_energy[0:new_length]
             self.kinetic_energy = self.kinetic_energy[0:new_length]
             self.basis = self.basis[0:new_length]
-            self._time = self.time[0:new_length]
             self._positions = self._positions[0:new_length]
             self._forces = self._forces[0:new_length]
     
@@ -85,11 +85,24 @@ class Trajectory(object):
     #------------------- Begin Properties -------------------------------
 
     @property
+    def num_atoms(self):
+        """number of atoms"""
+        return self.atoms.shape[0]
+        #return self._positions.shape[1]
+
+    @property
+    def length(self):
+        """number of frames"""
+        return self._time.shape[0]
+
+    @property
     def time(self):
-        """
-        nsteps array"
-        """
+        """nsteps array"""
         return self._time[self.in_point:self.out_point]
+    
+    @time.setter
+    def time(self,val):
+        self._time = val
 
     def set_timestep(self, timestep):
         self._time = np.arange(self.length) * timestep
@@ -106,10 +119,9 @@ class Trajectory(object):
         self._positions = val
 
     def set_positions(self, step_no, pos):
-        if self.num_atoms == 0:
-            self.num_atoms = len(pos)
-            self._positions = np.zeros((self.length, self.num_atoms, 3))
-            self._forces = np.zeros((self.length, self.num_atoms, 3))
+        if step_no >= self.length:
+            #print "Warning: This trajectory was initiated to contain %d steps. Skipping step %d." % (self.length, step_no+1)
+            return
         self._positions[step_no] = pos
 
     @property
@@ -124,20 +136,28 @@ class Trajectory(object):
         self._forces = val
 
     def set_forces(self, step_no, forces):
-        if self.num_atoms == 0:
-            self.num_atoms = len(pos)
-            self._positions = np.zeros((self.length, self.num_atoms, 3))
-            self._forces = np.zeros((self.length, self.num_atoms, 3))
+        if step_no >= self.length:
+            #print "Warning: This trajectory was initiated to contain %d steps. Skipping step %d." % (self.length, step_no+1)
+            return
         self._forces[step_no] = forces
 
     def set_basis(self, step_no, bas):
+        if step_no >= self.length:
+            print "Warning: This trajectory was initiated to contain %d steps. Skipping step %d." % (self.length, step_no+1)
+            return
         self.basis[step_no] = bas
 
 
     def set_e_total(self, step_no, etot):
+        if step_no >= self.length:
+            #print "Warning: This trajectory was initiated to contain %d steps. Skipping step %d." % (self.length, step_no+1)
+            return
         self.total_energy[step_no] = etot 
 
     def set_e_kinetic(self, step_no, ekin):
+        if step_no >= self.length:
+            #print "Warning: This trajectory was initiated to contain %d steps. Skipping step %d." % (self.length, step_no+1)
+            return
         self.kinetic_energy[step_no] = ekin
 
     #------------------- End Properties -------------------------------
@@ -155,6 +175,7 @@ class Trajectory(object):
         Loading the trajectory from a *.npz numpy binary file using numpy.load 
         """
         npz = np.load(filename)
+        self._time = npz['time']
         self.atoms = npz['atoms']
         self.basis = npz['basis']
         self.total_energy = npz['tote']
@@ -165,9 +186,7 @@ class Trajectory(object):
         else:
             print "This file does not contain forces"
             self._forces = np.zeros(self._positions.shape) # waste of memory
-        self._time = npz['time']
-        self.length = self._positions.shape[0]
-        self.num_atoms = self._positions.shape[1] 
+        #self.length = self._positions.shape[0]
         print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
 
 
@@ -203,6 +222,9 @@ class Trajectory(object):
         >>> traj.save('trajectory_unwrapped.npz')
         
         """
+        if self.length == 0:
+            print "Warning: Trajectory is empty";
+            return
         if imported['progressbar']:
             pbar = ProgressBar(widgets=['Unwrapping PBCs...',Percentage()], maxval = self.length).start()
 
@@ -235,6 +257,14 @@ class Trajectory(object):
         self.positions = self.r
         if imported['progressbar']:
             pbar.finish()
+
+    def wrap_pbc(self):
+        """
+        Wraps coordinates outside the unit cell into it
+        """
+        # Minimum image convention (may not be appropriate for extreme cell geometries!!)
+        self.positions = self.positions - (2*self.positions-1).astype(np.int)
+
 
     def get_snapshot(self, frame):
         """
@@ -422,84 +452,124 @@ class Trajectory(object):
         pbar.finish()
         return occupancies, inhabitants
 
+    def add_periodic_images(self, rx = [-1,0], ry = [-1,0], rz = [-1,0] ):
 
+        a = self.atoms
+        p = self.positions
+        f = self.forces
+        c = self.basis
 
+        nx = len(rx)
+        ny = len(ry)
+        nz = len(rz)
 
+        nsteps = p.shape[0] 
+        natoms = p.shape[1]
 
-#
-#
-#
-# !!! NOT TESTED
-#
-def pair_correlation_function(x,y,z,S,rMax,dr):
-    """Compute the three-dimensional pair correlation function for a set of
-    spherical particles contained in a cube with side length S.  This simple 
-    function finds reference particles such that a sphere of radius rMax drawn
-    around the particle will fit entirely within the cube, eliminating the need
-    to compensate for edge effects.  If no such particles exist, an error is 
-    returned.  Try a smaller rMax...or write some code to handle edge effects! ;) 
+        natoms2 = natoms*nx*ny*nz
 
-    From: http://www.shocksolution.com/microfluidics-and-biotechnology/calculating-the-pair-correlation-function-in-python/
-    
-    Arguments:
-        x               an array of x positions of centers of particles
-        y               an array of y positions of centers of particles
-        z               an array of z positions of centers of particles
-        S               length of each side of the cube in space
-        rMax            outer diameter of largest spherical shell
-        dr              increment for increasing radius of spherical shell
+        # we may run out of memory here, but better now than later
+        # forces may be commented out if not used 
+        # (or better, there should be an option to generally don't include forces to save mem)
+        p2 = np.empty((nsteps,natoms2,3))
+        #f2 = np.empty((nsteps,natoms2,3))
+        f2 = np.repeat(f,nx*ny*nz,axis=1)
+        #print p2.shape
+        #print f2.shape
+        print "%.2f MB allocated." % (p2.nbytes/(1024.**2))
+        c2 = np.empty(c.shape)
+        a2 = np.tile(a,nx*ny*nz)
 
-    Returns a tuple: (g, radii, interior_x, interior_y, interior_z)
-        g(r)            a numpy array containing the correlation function g(r)
-        radii           a numpy array containing the radii of the
-                        spherical shells used to compute g(r)
-        interior_x      x coordinates of reference particles
-        interior_y      y coordinates of reference particles
-        interior_z      z coordinates of reference particles
-    """
-    from numpy import zeros, sqrt, where, pi, average, arange, histogram
+        # This may take some time
+        pbar = ProgressBar(widgets=[u'Calculating images... frame ',SimpleProgress()], maxval = nsteps).start()
+        for s in range(nsteps):
+            pbar.update(s)
+            for i,x in enumerate(rx):
+                for j,y in enumerate(ry):
+                    for k,z in enumerate(rz):
+                        idx = ny*nz*i + nz*j + k 
+                        #print "Adding cell %d of %d" % (f+1,nx*ny*nz)
+                        ids = idx*natoms
+                        ide = (idx+1)*natoms
+                        p2[s,ids:ide,0] = (x + p[s,:,0]) / nx
+                        p2[s,ids:ide,1] = (y + p[s,:,1]) / ny
+                        p2[s,ids:ide,2] = (z + p[s,:,2]) / nz
+                        #f2[s,ids:ide,0] = (x + f[s,:,0]) / nx
+                        #f2[s,ids:ide,1] = (y + f[s,:,1]) / ny
+                        #f2[s,ids:ide,2] = (z + f[s,:,2]) / nz
+            c2[s,0] = c[s,0] * nx
+            c2[s,1] = c[s,1] * ny
+            c2[s,2] = c[s,2] * nz
 
-    # Find particles which are close enough to the cube center that a sphere of radius
-    # rMax will not cross any face of the cube
-    bools1 = x>rMax
-    bools2 = x<(S-rMax)
-    bools3 = y>rMax
-    bools4 = y<(S-rMax)
-    bools5 = z>rMax
-    bools6 = z<(S-rMax)
+        self.atoms = a2
+        self.positions = p2
+        self.forces = f2
+        self.basis = c2
+        pbar.finish()
+        print "Added %d images of the original unit cell. The number of atoms is now %d." % (nx*ny*nz-1, self.num_atoms)
 
-    interior_indices, = where(bools1*bools2*bools3*bools4*bools5*bools6)
-    num_interior_particles = len(interior_indices)
+    def _vtfAtomDef(self,b,e,c):
+        if b == e-1:
+            str = 'atom %d' % (b)
+        else:
+            str = 'atom %d:%d' % (b,e)
+        str += ' radius %.1f atomicnumber %d\n' % (elements[c]['vdw'],c)
+        # the atomic radius is not used by VMD, but is part of the vtf file spec, so I add it
+        return str
 
-    if num_interior_particles < 1:
-        raise  RuntimeError ("No particles found for which a sphere of radius rMax\
-                will lie entirely within a cube of side length S.  Decrease rMax\
-                or increase the size of the cube.")
+    def save_as_vtf(self, vtffile):
+        """
+        Saves the trajectory as a vtf file, that can be read by e.g. VMD. The vtf format is easy 
+        to write (and read), and flexible in that it allows for addition of custom "userdata", that 
+        can be easily read by newer versions of VMD's vtfplugin (https://github.com/olenz/vtfplugin)
+        and used in VMD scripts. This method will save forces as userdata, but it could be modified
+        to save other data instead (or as well).
 
-    edges = arange(0., rMax+1.1*dr, dr)
-    num_increments = len(edges)-1
-    g = zeros([num_interior_particles, num_increments])
-    radii = zeros(num_increments)
-    numberDensity = len(x)/S**3
+        The vtf format is documented here:
+        https://github.com/olenz/vtfplugin/wiki/VTF-format
+        """
+        
+        if (isinstance(vtffile, file)):
+            f = vtffile
+        else:
+            f = open(vtffile,'w')
+        
+        basis = self.basis
+        atoms = self.atoms
+        nsteps = self.length # NSW
+        nions = self.num_atoms
+        positions = self.positions
+        forces = self.forces
+        total_energy = self.total_energy
 
-    # Compute pairwise correlation for each interior particle
-    for p in range(num_interior_particles):
-        index = interior_indices[p]
-        d = sqrt((x[index]-x)**2 + (y[index]-y)**2 + (z[index]-z)**2)
-        d[index] = 2*rMax
+        # Write atom definitions
+        f.write("# Structure block\n")
+        b=0; e=0; c=-1
+        for at in self.atoms:
+            if c != at and e > 0:
+                f.write(self._vtfAtomDef(b,e,c))
+                b = e
+            c = at
+            e += 1
+        f.write(self._vtfAtomDef(b,e-1,c))
 
-        result, bins = histogram(d, bins=edges, normed=False)
+        # This currently takes longer time than necessary I think. Should look into optimization
+        pbar = ProgressBar(widgets=[u'Writing vtf... frame ',SimpleProgress()], maxval = nsteps).start()
+        for i in range(nsteps):
+            pbar.update(i)
+            f.write("\n# Energy: %.3f\n" % total_energy[i])
+            f.write("timestep\n")
+            f.write("pbc %.2f %.2f %.2f %.1f %.1f %.1f\n" % unitcell_components(basis[i]))
+            
+            pos = np.dot(positions[i], basis[i])
+            force = forces[i]
+            for po,fo in zip(pos,force):
+                f.write("%.8f    %.8f    %.8f     %.8f    %.8f    %.8f\n" % tuple(list(po) + list(fo)))
+        pbar.finish()
+        f.close()
+        print "Wrote %s" % (f.name)
+                
+                    
+                    
 
-        g[p,:] = np.array(result, dtype='float')/numberDensity
-    # Average g(r) for all interior particles and compute radii
-    g_average = zeros(num_increments)
-    for i in range(num_increments):
-        radii[i] = (edges[i] + edges[i+1])/2.        
-        rOuter = edges[i+1]
-        rInner = edges[i]
-        g_average[i] = average(g[:,i])/(4./3.*pi*(rOuter**3 - rInner**3))
-
-    return (g_average, radii, x[interior_indices], y[interior_indices], z[interior_indices])
-    # Number of particles in shell/total number of particles/volume of shell/number density
-    # shell volume = 4/3*pi(r_outer**3-r_inner**3)
 
