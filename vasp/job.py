@@ -360,18 +360,21 @@ class BatchStep(object):
         self.files = {}
         self.post_processing_tasks = []
 
-        filling = ''
+        filling = None
         for template_name in BatchStep.input_files.keys():
             if index != 0:
                 f = self.re_matchfile('.',BatchStep.input_files[template_name],index)
                 if f != False:
                     filling = f
+        if filling == None:
+            filling = '_'
 
         for template_name in BatchStep.input_files.keys():
             if index == 0:
                 indexed_name = template_name
             else:
                 indexed_name = BatchStep.input_files[template_name].replace('#','%s%d' % (filling,index))
+            #print "    [%s] => %s" % (template_name,indexed_name)
             self.files[template_name] = indexed_name
 
         self._re_check_output_files()
@@ -381,12 +384,14 @@ class BatchStep(object):
         # necessary? no, not really
         self.outlist = BatchStep.output_files.keys()
         
-        filling = ''
+        filling = None
         for template_name in BatchStep.input_files.keys():
             if self.index != 0:
                 f = self.re_matchfile('.',BatchStep.input_files[template_name],self.index)
                 if f != False:
                     filling = f
+        if filling == None:
+            filling = '_'
 
         for template_name in BatchStep.output_files.keys():
             if self.index == 0:
@@ -464,14 +469,17 @@ class BatchStep(object):
         if self.workdir != '':
             os.system("%s %s/* %s/" % (self.distributecmd,self.basedir, self.workdir))
 
-        # Run VASP:
+        # Move to workdir:
         if self.workdir != '':
             os.chdir(self.workdir)
+
+        # Run VASP:
         exit_code = os.system(self.vaspcmd)
         if exit_code != 0:
             print "VASP excited with exit code",exit_code
             sys.exit(1)
-
+        
+        # Move back to basedir:
         os.chdir(self.basedir)
 
         # Move files back

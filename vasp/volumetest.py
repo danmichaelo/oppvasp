@@ -2,70 +2,69 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Nov 22, 2010 22:13:55
+# Last modified: Dec 17, 2011 21:53:00
 #
 # Example usage:
 #
 #   import os
+#   import numpy as np
 #   from oppvasp.vasp.volumetest import VolumeTestCubicUnitCell
 #
-#   analyzeOnly = ('vaspcommand' not in os.environ)
-#   if analyzeOnly:
-#       print "Environment variable 'vaspcommand' not set. Entering analyze-only mode."
-#       basedir = os.path.curdir
-#       vaspcmd = "ls" #dummy
-#       workdir = '/dev/null' #dummy
-#   else:
-#       basedir = os.environ['SUBMITDIR']
-#       vaspcmd = os.environ['vaspcommand']
-#       workdir = os.environ['SCRATCH']
-#
-#   job = VolumeTestCubicUnitCell(basedir,workdir,vaspcmd)
-#   job.start(analyzeOnly)
+#   job = VolumeTestCubicUnitCell(
+#       lattice_parameters = np.arange(5.2, 5.8, 0.05),
+#       basedir = './',
+#       workdir = os.environ['SCRATCH'],
+#       vaspcmd = 'vasp.x'
+#   )
+#   job.start(dry_run = False, first_step = 1)
 #
 #############################################################################
 import os,sys
-from batchjob import BatchJob, ManualBatchStep
-from oppvasp import utils
+from job import BatchJob, BatchStep
+from oppvasp import util
 
 class VolumeTestCubicUnitCell(BatchJob):
 
-    def __init__(self,basedir,workdir,vaspcmd):
-        BatchJob.__init__(self,basedir,workdir,vaspcmd)
+    def __init__(self, lattice_parameters, **kwargs):
+        """
+        Create a VolumeTestCubicUnitCell object. 
+
+        Parameters
+        ----------
+        lattice_parameters : array of lattice parameters to test.
+           A set of POSCAR files named POSCAR.1, POSCAR.2, ... 
+           will be created based on the file POSCAR with the 
+           second line replaced with each of these values.
+
+        The remaining parameters are passed over to BatchJob.
+        Please see BatchJob for help on these.
+        """
+        BatchJob.__init__(self, **kwargs)
+
         self.paramName = 'VOL' # summary file header
-
-        # Read parameter input
-        self.parameterfile = 'volumetest.in'
-        os.chdir(self.basedir)
-        if not os.path.isfile(self.parameterfile):
-            print "Parameter-file '%s' not found!" % (self.parameterfile)
-            sys.exit(1)
-        f = open(self.parameterfile,'r')
-        lines = f.readlines()
-        f.close()
-        aMin = float(lines[0].strip())
-        aMax = float(lines[1].strip())
-        aStep = float(lines[2].strip())
-
-        paramValues = list(utils.frange6(aMin,aMax,aStep))
          
         POSCAR = open('POSCAR', 'r')
         plines = POSCAR.readlines()
         POSCAR.close()
 
-        for i in range(len(paramValues)):
-            plines[1] = '%.4f\n' % (paramValues[i])
-            ifile = open('POSCAR.%d' % (i), 'w')
+        for idx,param in enumerate(lattice_parameters):
+            plines[1] = '%.4f\n' % float(param)
+            ifile = open('POSCAR.%d' % (idx+1), 'w')
             ifile.writelines(plines)
             ifile.close()
-            self.addStep(VolumeTestStep(i,paramValues[i]))
+            step = VolumeTestStep(idx+1, float(param))
+            for template_name in BatchStep.input_files.keys():
+                if template_name != 'POSCAR':
+                    # use index-less 'template' file
+                    step[template_name] = template_name
+            self.add_step(step)
 
-        self.info()
+        self.print_info()
 
-class VolumeTestStep(ManualBatchStep):
+class VolumeTestStep(BatchStep):
     
-    def __init__(self,index,paramValue):
-        ManualBatchStep.__init__(self,index)
+    def __init__(self, index, paramValue):
+        BatchStep.__init__(self, index)
         self.paramValue = paramValue
 
     def __str__(self):

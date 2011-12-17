@@ -25,41 +25,54 @@ class ConvergenceTest(BatchJob):
     >>> job.start(analyzeOnly)
     """
 
-    def __init__(self,basedir,workdir,vaspcmd, parameterfile = 'convergencetest.in', distributecmd = 'cp -Rupf'):
-        BatchJob.__init__(self,basedir,workdir,vaspcmd,distributecmd)
-        
-        # Read parameter input
-        self.parameterfile = parameterfile 
-        os.chdir(self.basedir)
-        if not os.path.isfile(self.parameterfile):
-            print "Parameter-file '%s' not found!" % (self.parameterfile)
+    def __init__(self, parameters, **kwargs):
+            
+        BatchJob.__init__(self, **kwargs)
+
+        self.params = parameters
+        self.paramNames = parameters.keys()
+
+        # Check lengths:
+        npar = len(self.paramNames)
+        nval = np.array([len(self.params[k]) for k in self.params])
+        if not np.all(nval == nval[0]):
+            print "ConvergenceTest initialization error: \n" + \
+                " The number of values must be the same for all the parameters specified!"
             sys.exit(1)
-        f = open(self.parameterfile,'r')
-        lines = f.readlines()
-        f.close()
-        params = lines[0].split() # trims and splits
-        paramValues = [l.split() for l in lines[1:]]
-        self.paramName = params # summary file header
         
         # Add batch steps
-        for i in range(len(paramValues)):
-            self.addStep(ConvergenceTestStep(i,params,paramValues[i]))
+        for i in range(1,nval[0]+1):
+            print "Adding step",i
+            p = {}
+            for k in self.paramNames:
+                p[k] = str(self.params[k][i-1])
+            step = ConvergenceTestStep(i,p)
+            for template_name in BatchStep.input_files.keys():
+                # use index-less 'template' file
+                step[template_name] = template_name
+            self.add_step(step)
        
-        self.info()
+        self.print_info()
 
 class ConvergenceTestStep(BatchStep):
     """
     A single convergence job step.
     """
 
-    def __init__(self, index, params, paramValues):
+    def __init__(self, index, params):
         """
         Initializes a convergence test step.
-        <param> and <paramValues> must be arrays of the same length
+        params is a dict of parameters with values, like { 'ENCUT': 200, 'SIGMA': 0.1 }
         """
-        BatchStep.__init__(self,index)
+        BatchStep.__init__(self, index)
         self.params = params
-        self.paramValues = paramValues
+    
+    def preprocess_info(self):
+        """
+        This method is called from the print_info method
+        """
+        print "  -> Update INCAR:",str(self)
+
 
     def preprocess(self):
         """
@@ -67,32 +80,34 @@ class ConvergenceTestStep(BatchStep):
         """
         f = open(self['INCAR'],'r+'); 
         incar = f.read() # read the whole file
-        for param, paramValue in zip(self.params, self.paramValues):
-            search_str = r'%s(?P<ws1>[ \t]*)=(?P<ws2>[ \t]*)([.\w]*)' % (param)
+        for key in self.params:
+            val = self.params[key]
+            search_str = r'%s(?P<ws1>[ \t]*)=(?P<ws2>[ \t]*)([.\w]*)' % (key)
             matches = re.search(search_str, incar)
             if matches:
                 incar_mod = re.sub(
                     search_str,
-                    r'%s\g<ws1>=\g<ws2>%s' % (param, paramValue),
+                    r'%s\g<ws1>=\g<ws2>%s' % (key, val),
                     incar)
             else:
                 # the parameter was not found. let's add it
-                incar_mod = incar + '\n %s = %s' % (param, paramValue)
+                incar_mod = incar + '\n %s = %s\n' % (key, val)
             incar = incar_mod
         f.seek(0); 
         f.write(incar); 
         f.truncate(); 
         f.close();
-        print incar
+        #print incar
 
     def postprocess(self):
         pass
 
     def __str__(self):
-        return ','.join(('%s=%s' % (p,v) for p,v in zip(self.params,self.paramValues)))
+        return ','.join(('%s=%s' % (k,self.params[k]) for k in self.params.keys()))
 
     def get_name(self):
-        return ','.join(self.paramValues)
+        return ','.join((str(self.params[k]) for k in self.params.keys()))
+
 
 
 class ConvergenceTestData(BatchJobDataExtractor):
