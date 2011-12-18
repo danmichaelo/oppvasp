@@ -351,7 +351,7 @@ class IonicStep(object):
 
     def get_external_pressure(self):
         stress = self.get_stress()
-        return -(stress[0,0] + stress[1,1] + stress[2,2])/3.0
+        return (stress[0,0] + stress[1,1] + stress[2,2])/3.0
         
     def get_structure(self):
         struc = self._node.xpath("structure")[0]
