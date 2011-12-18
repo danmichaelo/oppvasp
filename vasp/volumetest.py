@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Dec 18, 2011 01:49:12
+# Last modified: Dec 18, 2011 02:09:07
 #
 # Example usage:
 #
@@ -45,20 +45,13 @@ class VolumeTestCubicUnitCell(BatchJob):
 
         self.paramName = 'VOL' # summary file header
          
-        POSCAR = open('POSCAR', 'r')
-        plines = POSCAR.readlines()
-        POSCAR.close()
 
         for idx,param in enumerate(lattice_parameters):
-            plines[1] = '%.4f\n' % float(param)
-            ifile = open('POSCAR.%d' % (idx+1), 'w')
-            ifile.writelines(plines)
-            ifile.close()
             step = VolumeTestStep(idx+1, float(param))
+            step.latticeparameter = param
             for template_name in BatchStep.input_files.keys():
-                if template_name != 'POSCAR':
-                    # use index-less 'template' file
-                    step[template_name] = template_name
+                # use index-less 'template' file
+                step[template_name] = template_name
             self.add_step(step)
 
         self.print_info()
@@ -114,4 +107,23 @@ class VolumeTestStep(BatchStep):
     
     def get_name(self):
         return "%.3f" % (self.paramValue)
+    
+    def preprocess_info(self):
+        """
+        This method is called from the print_info method
+        """
+        print "  -> Update POSCAR with new lattice parameter:",str(self.latticeparameter)
+
+    def preprocess(self):
+        """
+        Updates the POSCAR file to prepare for the execution of this step 
+        """
+        POSCAR = open('POSCAR', 'r')
+        plines = POSCAR.readlines()
+        POSCAR.close()
+        plines[1] = '%.4f\n' % float(self.latticeparameter)
+        
+        ifile = open('POSCAR', 'w')
+        ifile.writelines(plines)
+        ifile.close()
 
