@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Dec 17, 2011 21:53:00
+# Last modified: Dec 18, 2011 01:49:12
 #
 # Example usage:
 #
@@ -20,8 +20,10 @@
 #
 #############################################################################
 import os,sys
+import numpy as np
 from job import BatchJob, BatchStep
 from oppvasp import util
+from oppvasp.vasp.parsers import VasprunParser
 
 class VolumeTestCubicUnitCell(BatchJob):
 
@@ -60,6 +62,46 @@ class VolumeTestCubicUnitCell(BatchJob):
             self.add_step(step)
 
         self.print_info()
+
+    def update_summaryfile(self, step):
+        try:
+            vasprun = VasprunParser(step['vasprun.xml'])
+        except:
+            print "BatchJob: Failed to parse '%s'. Did VASP crash?" % step['vasprun.xml']
+            sys.exit(1)
+        
+        final_step = vasprun.ionic_steps[-1]
+        toten = final_step.get_total_energy()
+        final_struct = final_step.get_structure()
+        shortestbond,idx1,idx2 = final_struct.get_shortest_bond()
+        forces = final_struct.get_forces('d') # should use cart in final
+        fx = np.sum(forces[:,0])
+        fy = np.sum(forces[:,1])
+        fz = np.sum(forces[:,2])
+        #print ','.join([str(x) for x in forces[:,0]])
+        #print forces[-1]
+        drift = [fz,fy,fz]
+        print "not drift:",drift
+
+        maxforce = np.max( np.sum(forces**2,axis=1) )
+
+        pressure = final_step.get_external_pressure()
+
+        cputime,realtime = vasprun.get_time_spent()
+
+        summaryline = "%(name)s\t%(kpoints)d\t%(shortbond).3f\t%(toten).4f\t%(cpu).0f\t%(maxforce).4f\t%(pressure).2f\t%(drift).4f" % {
+            'name' : step.get_name(),
+            'kpoints' : vasprun.get_num_kpoints(),
+            'shortbond' : shortestbond,
+            'toten' : toten,
+            'cpu' : cputime,
+            'maxforce' : maxforce,
+            'pressure' : pressure,
+            'drift' : max(drift)
+            }
+        sf = open(self.summaryfile,'a')
+        sf.write(summaryline+"\n")
+        sf.close()
 
 class VolumeTestStep(BatchStep):
     

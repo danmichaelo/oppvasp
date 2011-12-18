@@ -329,8 +329,9 @@ class IterativeVasprunParser(object):
 
 
 class IonicStep(object):
-    def __init__(self, node):
+    def __init__(self, node, atoms):
         self._node = node
+        self._atoms = atoms
     
     def get_total_energy(self):
         """Returns the total energy in electronvolt"""
@@ -339,6 +340,46 @@ class IonicStep(object):
             return float(results[0].text)
         else:
             raise LookupError('Value not found')
+    
+    def get_stress(self):
+        """Returns stress matrix in kB"""
+        results = self._node.xpath( "varray[@name='stress']/v")
+        if results:
+            return np.array([[float(x) for x in p.text.split()] for p in results])
+        else:
+            raise LookupError('Value not found')
+
+    def get_external_pressure(self):
+        stress = self.get_stress()
+        return -(stress[0,0] + stress[1,1] + stress[2,2])/3.0
+        
+    def get_structure(self):
+        struc = self._node.xpath("structure")[0]
+
+        basis = struc.xpath("crystal/varray[@name='basis']/v")
+        basis = [[float(x) for x in p.text.split()] for p in basis]
+        
+        rec_basis = struc.xpath("crystal/varray[@name='rec_basis']/v")
+        rec_basis = [[float(x) for x in p.text.split()] for p in rec_basis]
+
+        pos = struc.xpath("varray[@name='positions']/v")
+        pos = [[float(x) for x in p.text.split()] for p in pos]
+
+        vel = struc.xpath("varray[@name='velocities']/v")
+        if vel:
+            vel = [[float(x) for x in p.text.split()] for p in vel]
+        else:
+            # Found no velocities
+            vel = None
+
+        forces = self._node.xpath("varray[@name='forces']/v")
+        if forces:
+            forces = [[float(x) for x in p.text.split()] for p in forces]
+        else:
+            # Found no forces
+            forces = None
+
+        return Structure( cell = basis, atomtypes = self._atoms, positions = pos, velocities = vel, forces = forces, coords = 'direct' )
 
 class VasprunParser(object):
     """
@@ -382,9 +423,16 @@ class VasprunParser(object):
 
     @property
     def ionic_steps(self):
+
+        atoms = []
+        for rc in self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc"):
+            atoms.append(get_atomic_number_from_symbol(rc[0].text.strip()))
+        #atoms = [rc[0].text.strip() for rc in atoms]
+        atoms = np.array(atoms, dtype=int)
+
         results = self.doc.xpath( "/modeling/calculation")
         if results:
-            return [IonicStep(r) for r in results]
+            return [IonicStep(r, atoms) for r in results]
         else:
             raise LookupError('Value not found')
     
@@ -400,16 +448,18 @@ class VasprunParser(object):
             return results[0].text
         else:
             raise LookupError('Value not found')
-
-    def get_num_kpoints(self):
+    
+    def get_kpoints(self):
         """Returns the number of k-points"""
-        results = self.doc.xpath( "/modeling/kpoints/varray[@name='"+kpointlist+"']")
+        results = self.doc.xpath( "/modeling/kpoints/varray[@name='kpointlist']/v")
         if results:
-            return results[0].text
+            return np.array([[float(x) for x in k.text.split()] for k in results])
         else:
             raise LookupError('Value not found')    
 
-    
+    def get_num_kpoints(self):
+        """Returns the number of k-points"""
+        return self.get_kpoints().shape[0]
 
     def get_sc_steps(self):
         """
@@ -465,6 +515,12 @@ class VasprunParser(object):
             # Found no velocities
             vel = None
 
+        forces = struc.xpath("varray[@name='forces']/v")
+        if forces:
+            forces = [[float(x) for x in p.text.split()] for p in forces]
+        else:
+            # Found no forces
+            forces = None
 
         atoms = []
         for rc in self.doc.xpath("/modeling/atominfo/array[@name='atoms']/set/rc"):
@@ -472,7 +528,7 @@ class VasprunParser(object):
         #atoms = [rc[0].text.strip() for rc in atoms]
         atoms = np.array(atoms, dtype=int)
 
-        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, coords = 'direct' )
+        return Structure( cell = basis, atomtypes = atoms, positions = pos, velocities = vel, forces = forces, coords = 'direct' )
 
     def get_initial_structure(self):
         """ Returns the initial structure as a oppvasp.Structure object. """
@@ -572,27 +628,21 @@ class VasprunParser(object):
                 max_force_atm = i
         return (max_force,max_force_atm)
 
-    def get_cpu_time(self):
+    def get_time_spent(self):
         """
-        Returns the CPU time spent. The value returned corresponds to the the value found in
-        OUTCAR files on a line like this: 
-        
-        >>> LOOP+:  cpu time  482.23: real time  482.58
-        
-        This will value is always somewhat lower than the value found in OUTCAR file on a 
-        line like this:
-        
+        Returns a tupple (CPU time, real time) spent. 
+
         >>>         Total CPU time used (sec):      490.877
         
-        but it appears like this value is not available from vasprun.xml files.
         """
-        time = self.doc.xpath( "/modeling/calculation/time[@name='totalsc']")
-        if time:
-            time = time[0].text.split()
-            return float(time[0])
-        else:
-            raise LookupError('Value not found in %s' % (self.filename))
-        
+        calc = self.doc.xpath( "/modeling/calculation" )
+        cputime = 0.0
+        realtime = 0.0
+        for c in calc:
+            stepcpu, stepreal = [float(t) for t in c.xpath("time[@name='totalsc']")[0].text.split()]
+            cputime += stepcpu
+            realtime += stepreal
+        return cputime, realtime
 
 
 

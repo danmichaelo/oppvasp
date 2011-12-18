@@ -2,7 +2,7 @@
 
 import numpy as np
 from oppvasp import get_atomic_number_from_symbol, elements, direct_to_cartesian, cartesian_to_direct
-
+from oppvasp.util import get_pairs
 
 def unique_list(seq, idfun=None):
     # Example: unique_list(a, lambda x: x.lower())
@@ -22,7 +22,7 @@ class Structure(object):
     """
     A Structure object defines a periodic atomic structure, keeping 
     information about its unit cell together with the types, positions 
-    and possibly velocities of its atoms. Internally, coordinates are
+    and possibly forces of its atoms. Internally, coordinates are
     stored in direct coordinates, to avoid more conversion than necessary
 
     Properties:
@@ -30,13 +30,15 @@ class Structure(object):
         - cell
         - atomtypes
         - positions
+        - forces 
         - velocities
     """
     
-    def __init__(self, cell = [], positions = [], atomtypes = None, velocities = None, coords = 'direct'):
+    def __init__(self, cell = [], positions = [], atomtypes = None, forces = None, velocities = None, coords = 'direct'):
         self.set_cell(cell)
         self.set_atomtypes(atomtypes)
         self.set_positions(positions, coords)
+        self.set_forces(forces, coords)
         self.set_velocities(velocities, coords)
    
     def get_num_atoms(self):
@@ -132,8 +134,28 @@ class Structure(object):
             self._positions = cartesian_to_direct(self._positions, self._cell)
     
     
+    def get_forces(self, coords):
+        """ (n,3) array """
+        if coords[0].lower() == 'd':
+            return self._forces
+        elif coords[0].lower() == 'c':
+            return direct_to_cartesian(self._forces, self._cell)
+
+    def set_forces(self, vel, coords):
+        if type(vel).__name__ == 'ndarray':
+            self._forces = vel.copy()
+        elif type(vel).__name__ == 'list':
+            self._forces = np.array(vel)
+        elif type(vel).__name__ == 'NoneType':
+            self._forces = None
+        else:
+            print "Error: forces must be a list or numpy array"
+            self._forces = None
+        if self._forces != None and coords[0] == 'c':
+            self._forces = cartesian_to_direct(self._forces, self._cell)
+
     def get_velocities(self, coords):
-        """ Atom velocities array """
+        """ (n,3) array """
         if coords[0].lower() == 'd':
             return self._velocities
         elif coords[0].lower() == 'c':
@@ -204,6 +226,7 @@ class Structure(object):
         self.set_cell(atoms_obj.get_cell())
         self.set_atomtypes(atoms_obj.get_atomic_numbers())
         self.set_positions(atoms_obj.get_positions())
+        self.set_forces(atoms_obj.get_forces())
         self.set_velocities(atoms_obj.get_velocities())
 
     #-------------- Methods for analyzing the structure -----------
@@ -312,4 +335,36 @@ class Structure(object):
             print u"Warning: largest displacement of %.1f (direct units) is rather large..." % (np.max(dr))
 
         self.set_positions(r0+dr, 'direct')
+    
+    def get_shortest_bond(self):
+        """Returns a tupple containing the shortest bond length in Angstrom,
+        followed by the indices of the two atoms making up the bond"""
+
+        pos = self._positions
+        natoms = pos.shape[0]
+
+        # Build array of pair indices:
+        pairs = get_pairs(natoms)
+        npairs = pairs.shape[0]
+
+        # Find displacement vectors for all atoms:
+        x = pos[pairs[:,0]] - pos[pairs[:,1]]
+
+        # Use minimum image convention to threat bonds over PBCs
+        # Note: This will not work with *very* tilted unit cells
+        x = x - (2*x).astype('int')
+
+        X = direct_to_cartesian(x, self._cell)
+
+        r2 = (X**2).sum(axis=1)
+        r = np.sqrt(r2)
+
+        meanr2 = np.mean(r2,axis=0)
+        meanr = np.mean(r,axis=0)
+
+        minidx = np.argmin(r)
+        minpair = pairs[minidx]
+        minr = r[minidx]
+    
+        return (minr,minpair[0],minpair[1])
 

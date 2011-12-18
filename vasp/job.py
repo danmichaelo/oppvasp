@@ -13,7 +13,7 @@ import numpy as np
 import glob # for finding files using wildcards
 from operator import itemgetter
 from time import strftime
-from parsers import VasprunParser, OutcarParser, PoscarParser, IterativeVasprunParser
+from parsers import VasprunParser, IterativeVasprunParser
 
 __docformat__ = "restructuredtext en"
 
@@ -152,29 +152,41 @@ class BatchJob(object):
         print ">>> BatchJob complete at %s" % strftime("%Y-%m-%d %H:%M:%S")
 
     def update_summaryfile(self, step):
-        if not os.path.isfile(step['OUTCAR']):
-            print "No output file '%s' to analyze" % (step['OUTCAR'])
+        if not os.path.isfile(step['vasprun.xml']):
+            print "No output file '%s' to analyze" % (step['vasprun.xml'])
             return
         try:
-            poscar = PoscarParser(step['POSCAR'])
-            outcar = OutcarParser(step['OUTCAR'], selective_dynamics = poscar.selective_dynamics)
-            outcar.readItAll()
+            vasprun = VasprunParser(step['vasprun.xml'])
         except:
-            print "BatchJob: Failed to parse output files from VASP. Did VASP crash?"
+            print "BatchJob: Failed to parse vasprun.xml. Did VASP crash?"
             sys.exit(1)
         
-        try:
-            pressure = "%.4f" % outcar.get_max_pressure()
-        except AttributeError:
-            pressure = "  -  "
+        #try:
+        #    pressure = "%.4f" % outcar.get_max_pressure()
+        #except AttributeError:
+        #    pressure = "  -  "
+
+        final_struct = vasprun.get_final_structure()
+        shortest_bondlength = final_struct.get_short
+        forces = final_struct.get_forces()
+        fx = np.sum(forces[:,0])
+        fy = np.sum(forces[:,1])
+        fz = np.sum(forces[:,2])
+        maxforce = np.max( np.sum(forces**2,axis=1) )
+        drift = (fz,fy,fz)
+        print drift
+
+        cputime,realtime = vasprun.get_time_spent()
+        print cputime
+        return
 
         summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
             step.get_name(),
-            outcar.get_num_kpoints(),
-            outcar.dist,
-            outcar.get_total_energy(),
-            outcar.get_cpu_time(),
-            outcar.get_max_force(),
+            vasprun.get_num_kpoints(),
+            shortest_bondlength,
+            vasprun.get_total_energy(),
+            cputime,
+            maxforce,
             pressure,
             outcar.get_max_drift()
         )

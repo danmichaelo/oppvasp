@@ -146,6 +146,8 @@ def direct_to_cartesian(positions, basis):
         Array containg the lattice vectors in Cartesian coordinates
 
     """
+    if positions == None:
+        return None
     #print "converting to cartesian basis..."
     t1 = time.clock()
     
@@ -195,6 +197,8 @@ def cartesian_to_direct(positions, basis):
         Array containg the lattice vectors in Cartesian coordinates
 
     """
+    if positions == None:
+        return None
     pos = np.zeros(positions.shape)
     i = 0
     inv_basis = np.linalg.inv(basis)
