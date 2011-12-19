@@ -15,7 +15,7 @@ from matplotlib import rc
 import matplotlib.pyplot as plt
 # print matplotlib.__version__
 
-def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5): 
+def prepare_canvas(width = 350.0, height = 'auto', fontsize = 10, fontsize_small = 8, lw = 0.5): 
     """
     Prepares a figure with specified width <width> and height 
     calculated according to the golden mean ratio. 
@@ -27,6 +27,10 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
     Example:
         prepare_canvas( width = '7.2 cm' )
     """
+    
+    inches_per_pt = 1.0/72.27 # According to TeX 
+    inches_per_cm = 1.0/2.54  # 
+    
     try:
         width = width.split()
         width_value = float(width[0])
@@ -35,8 +39,6 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
         width_value = float(width)
         width_units = 'pt'  # assume points
     
-    inches_per_pt = 1.0/72.27 # According to TeX 
-    inches_per_cm = 1.0/2.54  # 
     if width_units == 'pt':
         fig_width = width_value * inches_per_pt
     elif width_units == 'cm':
@@ -45,7 +47,24 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
         fig_width = width_value
 
     golden_mean = (np.sqrt(5)-1.0)/2.0      # Aesthetic ratio
-    fig_height = fig_width*golden_mean      # height in inches
+    if height == 'auto':
+        fig_height = fig_width*golden_mean      # height in inches
+    else:
+        try:
+            height = height.split()
+            height_value = float(height[0])
+            height_units = height[1]
+        except AttributeError:
+            height_value = float(height)
+            height_units = 'pt'  # assume points
+        
+        if height_units == 'pt':
+            fig_height = height_value * inches_per_pt
+        elif height_units == 'cm':
+            fig_height = height_value * inches_per_cm
+        elif height_units == 'in':
+            fig_height = height_value
+    
     fig_size = [fig_width,fig_height]
 
     rc('figure', figsize=fig_size)
@@ -56,7 +75,7 @@ def prepare_canvas(width = 350.0, fontsize = 10, fontsize_small = 8, lw = 0.5):
         'top'    : 0.93
         })
     rc('lines', linewidth=lw)
-    rc('font', family='sans-serif', serif=['Latin Modern Roman','Palatino'], size=fontsize)
+    rc('font', family='serif', serif=['Latin Modern Roman','Palatino'], size=fontsize)
     rc('text', usetex=False)
     rc('legend', fontsize=fontsize)
     rc('axes', labelsize=fontsize)
