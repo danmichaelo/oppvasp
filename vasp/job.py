@@ -13,7 +13,7 @@ import numpy as np
 import glob # for finding files using wildcards
 from operator import itemgetter
 from time import strftime
-from parsers import VasprunParser, IterativeVasprunParser
+from parsers import VasprunParser, IterativeVasprunParser, OutcarParser
 
 __docformat__ = "restructuredtext en"
 
@@ -597,8 +597,9 @@ class BatchJobDataExtractor(object):
 
     """
 
-    outcar_pattern = 'OUTCAR.([0-9]*)'
-    vasprun_pattern = 'vasprun([0-9]*).xml'
+    # If changing, remember to change the search pattern in glob.glob ~ 55 lines below too 
+    outcar_pattern = 'OUTCAR.*?([0-9]+)'
+    vasprun_pattern = 'vasprun.*?([0-9]+).xml'
 
     def __init__(self, directory = '', verbose = False, data_spec = []):
         """
@@ -622,15 +623,18 @@ class BatchJobDataExtractor(object):
         self.extract_data()
         
     
-    def sort(self, column):
+    def sort(self, cname):
         """
         Sorts the dataset according to the values of the column <column> of the dataset. 
         The columns are just the values specified for <data_spect> in the constructor.
         The data in the sort column must be of a type that can be sorted with numpy.
         """
-        tmp = np.array(self.get_data_column(column))
-        idx = np.argsort(tmp)
-        self.data = [self.data[i] for i in idx]
+        args = np.argsort(self.data[cname])
+        for k in self.data:
+            self.data[k] = self.data[k][args]
+        #tmp = np.array(self.get_data_column(column))
+        #idx = np.argsort(tmp)
+        #self.data = [self.data[i] for i in idx]
 
 
     def extract_data(self):
@@ -648,8 +652,10 @@ class BatchJobDataExtractor(object):
         )
         jobs = {}
         for filetype,pattern in filetypes:
-            filelist = glob.glob(self.directory + pattern.replace('([0-9]*)','*'))
+            #print self.directory + pattern.replace('([0-9]*)','*')
+            filelist = glob.glob(self.directory + pattern.replace('.*?([0-9]+)','*'))
             for filename in filelist:
+                #print pattern,' :: ',filename
                 m = re.search(pattern,filename)
                 if m:
                     index = m.group(1)
@@ -665,17 +671,22 @@ class BatchJobDataExtractor(object):
 
         num_cols = len(self.data_spec)
         num_rows = len(jobs)
-        self.data = [[0 for i in range(num_cols)] for j in range(num_rows)]
+        self.data = {}
+        for spec in self.data_spec:
+            self.data[spec['name']] = np.zeros(num_rows)
+        
         i = 0
         for index, files in sorted(jobs.items()):
             if self.verbose:
                 print 
             parser = None
-            for j in range(num_cols):
-                fn = self.data_spec[j]['fn']
+            for spec in self.data_spec:
+                fn = spec['fn']
+                sname = spec['name']
                 if not fn in dir(parser):
                     oldparser = parser
                     parser = self._get_parser(files, fn)
+                    #print "Parser is",str(parser)
                     if parser is None:
                         print "Uh oh, the extractor method '%s' was not found " % (fn) \
                             + "in any of the available parsers for the files:"
@@ -683,14 +694,14 @@ class BatchJobDataExtractor(object):
                         sys.exit(1)
                     if self.verbose:
                         print "switched from %s to %s for %s " % (oldparser,parser,fn)
-                extract_function = getattr(parser, self.data_spec[j]['fn'])
-                if 'params' in self.data_spec[j]:
-                    self.data[i][j] = extract_function(*self.data_spec[j]['params']) 
+                extract_function = getattr(parser, fn)
+                if 'params' in spec:
+                    self.data[sname][i] = extract_function(*spec['params']) 
                 else:
-                    self.data[i][j] = extract_function() 
-                if 'type' in self.data_spec[j]:
-                    if self.data_spec[j]['type'] == 'float':
-                        self.data[i][j] = float(self.data[i][j])
+                    self.data[sname][i] = extract_function() 
+                #if 'type' in spec:
+                #    if self.data_spec[j]['type'] == 'float':
+                #        self.data[i][j] = float(self.data[i][j])
             i+=1
         if self.verbose:
             print 

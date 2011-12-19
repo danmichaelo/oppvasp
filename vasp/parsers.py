@@ -349,7 +349,7 @@ class IonicStep(object):
         else:
             raise LookupError('Value not found')
 
-    def get_external_pressure(self):
+    def get_pressure(self):
         stress = self.get_stress()
         return (stress[0,0] + stress[1,1] + stress[2,2])/3.0
         
@@ -435,7 +435,24 @@ class VasprunParser(object):
             return [IonicStep(r, atoms) for r in results]
         else:
             raise LookupError('Value not found')
+
+    def get_final_energy(self):
+        return self.ionic_steps[-1].get_total_energy()
     
+    def get_final_pressure(self):
+        return self.ionic_steps[-1].get_pressure()
+
+    def get_total_energy(self):
+        print "VasprunParser: Method get_total_energy is deprecated! "+\
+                "Please use get_final_energy instead"
+        return self.get_final_energy()
+
+    def get_cpu_time(self):
+        return self.get_time_spent()[0]
+    
+    def get_clock_time(self):
+        return self.get_time_spent()[1]
+
     def get_incar_property(self, propname):
         """ 
         Returns the value of a given INCAR property as a string,
@@ -630,16 +647,24 @@ class VasprunParser(object):
 
     def get_time_spent(self):
         """
-        Returns a tupple (CPU time, real time) spent. 
+        Returns a tupple (CPU time, real time) of seconds spent. 
+        Note that value is slightly lower than the value printed at
+        the end of OUTCAR. The value corresponds to the sum of the
+        times given on lines like this:
+          LOOP+:  cpu time   35.95: real time   36.12
+        This sum is usually slightly lower than the values reported
+        on the last lines of the OUTCAR file
+          Total CPU time used (sec):       37.031
 
-        >>>         Total CPU time used (sec):      490.877
-        
+        vasprun.xml sum: 157937, 162259
+        OUTCAR: 157943, 162261
         """
         calc = self.doc.xpath( "/modeling/calculation" )
         cputime = 0.0
         realtime = 0.0
         for c in calc:
             stepcpu, stepreal = [float(t) for t in c.xpath("time[@name='totalsc']")[0].text.split()]
+            #print stepcpu
             cputime += stepcpu
             realtime += stepreal
         return cputime, realtime
