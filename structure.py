@@ -240,6 +240,7 @@ class Structure(object):
             for j in range(sy):
                 for k in range(sz):
                     m = i*sy*sz + j*sz + k
+                    #print m
                     sup[m*nat:(m+1)*nat] = self._positions + np.dot(c,[i, j, k])
         if coords[0].lower() == 'c':
             return direct_to_cartesian(sup, self._cell)
@@ -335,36 +336,202 @@ class Structure(object):
             print u"Warning: largest displacement of %.1f (direct units) is rather large..." % (np.max(dr))
 
         self.set_positions(r0+dr, 'direct')
+
     
-    def get_shortest_bond(self):
-        """Returns a tupple containing the shortest bond length in Angstrom,
-        followed by the indices of the two atoms making up the bond"""
+    def get_neighbours(self, atom_no, rmax = 3.0):
+        """
+        Returns a list of all atoms within <rmax> of atom <atom_no>,
+        including atoms across periodic boundary conditions.
+        """
+
+        natoms = self.get_num_atoms()
+        a = self._cell[0]
+        b = self._cell[1]
+        c = self._cell[2]
+
+        # Find distance between opposing faces of the cell:
+        wa = abs(np.dot(a,np.cross(b,c))) / np.linalg.norm(np.cross(b,c))
+        wb = abs(np.dot(b,np.cross(c,a))) / np.linalg.norm(np.cross(c,a))
+        wc = abs(np.dot(c,np.cross(a,b))) / np.linalg.norm(np.cross(a,b))
+
+        # If half the max radius exceeds one of the face-to-face distances (wa, wb or wc), 
+        # we add more atoms in the given direction(s) as necessary.
+        la = 1 + int(2*rmax/wa)
+        lb = 1 + int(2*rmax/wb)
+        lc = 1 + int(2*rmax/wc)
+        print "dim:",la,lb,lc
+        #p2 = self.get_supercell_positions(la,lb,lc, coords='d')
+
+        pos = np.zeros((natoms*la*lb*lc,3))
+        offsets = np.zeros((natoms*la*lb*lc,3), dtype=np.int)
+        #c = np.diag((1,1,1)) # since we use direct coordinates
+        for i in range(la):
+            for j in range(lb):
+                for k in range(lc):
+                    m = i*lb*lc + j*lc + k
+                    pos[m*natoms:(m+1)*natoms] = self._positions + np.array((i, j, k))
+                    offsets[m*natoms:(m+1)*natoms] = [i, j, k]
+
+        indices = np.tile(np.arange(0,natoms), la*lb*lc)
+
+        # Center at atom <index>:
+        pos -= pos[atom_no]
+        # Minimum image convention with coordinates in range lb*[-0.5,0.5>
+        pos[:,0] -= la*(pos[:,0]*2/la).astype('int')
+        pos[:,1] -= lb*(pos[:,1]*2/lb).astype('int')
+        pos[:,2] -= lc*(pos[:,2]*2/lc).astype('int')
+        
+        cart = direct_to_cartesian(pos,self._cell)
+        dr = np.sqrt(np.sum(cart**2,1))
+        cond = np.logical_and(dr < rmax, dr > 0.0)
+
+        dr = dr[cond]
+        pos = pos[cond]
+        offsets = (2*pos).astype('int')
+        indices = indices[cond]
+
+        # sort:
+        so = np.argsort(dr)
+        dr = dr[so]
+        pos = pos[so]
+        offsets = offsets[so]
+        indices = indices[so]
+
+        return indices, dr, offsets, pos
+
+    
+    def get_shortest_bond(self, include_self = False, safe_mode = True, rmax = 3.0):
+        """
+        Returns a tupple containing the shortest bond length in Angstrom,
+        followed by the indices of the two atoms making up the bond
+        
+        Parameters:
+            include_self : bool (default False)
+                Whether to check for bonds between an atom and its _own_ periodic image.
+                This is only needed for very small unit cells, typically with a single atom.
+            safe_mode : bool (default True)
+                Much slower, but safer for non-cubic cells
+            rmax : float (default 3.0)
+                Maximum bond length (in Angstrom) to check for 
+                (only used in safe_mode)
+
+        """
+        a = self._cell[0]
+        b = self._cell[1]
+        c = self._cell[2]
 
         pos = self._positions
         natoms = pos.shape[0]
+        if natoms == 1:
+            print "Note from get_shortest_bond(): include_self is enabled since only a single atom was found!"
+            include_self = True
 
-        # Build array of pair indices:
-        pairs = get_pairs(natoms)
-        npairs = pairs.shape[0]
+        # Limit to sphere of radius Rc
+        if safe_mode:
+            #if include_self:
+            #    print "include_self and safe_mode are not currently compatible. sorry"
+            #    return
+            
+            natoms = self.get_num_atoms()
+            a = self._cell[0]
+            b = self._cell[1]
+            c = self._cell[2]
 
-        # Find displacement vectors for all atoms:
-        x = pos[pairs[:,0]] - pos[pairs[:,1]]
+            # Find distance between opposing faces of the cell:
+            wa = abs(np.dot(a,np.cross(b,c))) / np.linalg.norm(np.cross(b,c))
+            wb = abs(np.dot(b,np.cross(c,a))) / np.linalg.norm(np.cross(c,a))
+            wc = abs(np.dot(c,np.cross(a,b))) / np.linalg.norm(np.cross(a,b))
 
-        # Use minimum image convention to threat bonds over PBCs
-        # Note: This will not work with *very* tilted unit cells
-        x = x - (2*x).astype('int')
+            # If half the max radius exceeds one of the face-to-face distances (wa, wb or wc), 
+            # we add more atoms in the given direction(s) as necessary.
+            la = 1 + int(2*rmax/wa)
+            lb = 1 + int(2*rmax/wb)
+            lc = 1 + int(2*rmax/wc)
+            print "dim:",la,lb,lc
+            #p2 = self.get_supercell_positions(la,lb,lc, coords='d')
+            pos = np.zeros((natoms*la*lb*lc,3))
+            #offsets = np.zeros((natoms*la*lb*lc,3), dtype=np.int)
+            #c = np.diag((1,1,1)) # since we use direct coordinates
+            for i in range(la):
+                for j in range(lb):
+                    for k in range(lc):
+                        m = i*lb*lc + j*lc + k
+                        pos[m*natoms:(m+1)*natoms] = self._positions + np.array((i, j, k))
+                        #offsets[m*natoms:(m+1)*natoms] = [i, j, k]
+            indices = np.tile(np.arange(natoms), la*lb*lc)
 
-        X = direct_to_cartesian(x, self._cell)
+            paired = np.zeros(natoms, dtype=np.int)
+            minr = np.zeros(natoms)
+            for j in np.arange(natoms):
+                # Center at atom <index>:
+                pos -= pos[j]
+                # Minimum image convention with coordinates in range lb*[-0.5,0.5>
+                pos[:,0] -= la*(pos[:,0]*2/la).astype('int')
+                pos[:,1] -= lb*(pos[:,1]*2/lb).astype('int')
+                pos[:,2] -= lc*(pos[:,2]*2/lc).astype('int')
+                
+                cart = direct_to_cartesian(pos,self._cell)
+                dr = np.sqrt(np.sum(cart**2,1))
+                cond = np.logical_and(dr < rmax, dr > 0.0)
 
-        r2 = (X**2).sum(axis=1)
-        r = np.sqrt(r2)
+                dr = dr[cond]
+                if dr.shape[0] == 0:
+                    print "[Warning]: No neighbours found within %.2f Angstrom of atom %d" % (rmax,j)
+                    minr[j] = 1001.0
+                    continue
 
-        meanr2 = np.mean(r2,axis=0)
-        meanr = np.mean(r,axis=0)
+                so = np.argsort(dr)
 
-        minidx = np.argmin(r)
-        minpair = pairs[minidx]
-        minr = r[minidx]
+                #pos = pos[cond]
+                #offsets = (2*pos).astype('int')
+                ##indices = indices[cond]
+
+                ## sort:
+                #dr = dr[so]
+                #pos = pos[so]
+                #offsets = offsets[so]
+                #indices = indices[so]
+
+                #indices, dr, offsets, pos = self.get_neighbours(j)
+                paired[j] = indices[cond][so][0]
+                minr[j] = dr[so][0]
+                #pairs[j,nearest] = 
+                #minpair = pairs[j,nearest] 
+                #minr = dr[0]
+            
+            #print nearest,shortest
+            minidx = np.argmin(minr)
+            minr = minr[minidx]
+            if minr > 1000.0:
+                print "[Error]: No bonds shorter than %.2f Angstrom found. Please increase rmax" % rmax
+
+            return (minr,minidx,paired[minidx])
+
+        else:
+
+            # Build array of pair indices:
+            pairs = get_pairs(natoms, include_self=include_self)
+            npairs = pairs.shape[0]
+
+            # Find displacement vectors for all pairs:
+            x = pos[pairs[:,0]] - pos[pairs[:,1]]
+        
+            # Use minimum image convention to threat bonds over PBCs
+            # Note: use safe_mode with tilted unit cells in which the 
+            # shortest bond is close to half of one of the cell dimensions
+            x = x - (2*x).astype('int')
+
+            X = direct_to_cartesian(x, self._cell)
+
+            r2 = (X**2).sum(axis=1)
+            r = np.sqrt(r2)
+
+            meanr2 = np.mean(r2,axis=0)
+            meanr = np.mean(r,axis=0)
+
+            minidx = np.argmin(r)
+            minpair = pairs[minidx]
+            minr = r[minidx]
     
-        return (minr,minpair[0],minpair[1])
+            return (minr,minpair[0],minpair[1])
 

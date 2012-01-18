@@ -167,7 +167,7 @@ class BatchJob(object):
         #    pressure = "  -  "
 
         final_struct = vasprun.get_final_structure()
-        shortest_bondlength = final_struct.get_short
+        shortest_bond = final_struct.get_shortest_bond()
         forces = final_struct.get_forces()
         fx = np.sum(forces[:,0])
         fy = np.sum(forces[:,1])
@@ -183,7 +183,7 @@ class BatchJob(object):
         summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
             step.get_name(),
             vasprun.get_num_kpoints(),
-            shortest_bondlength,
+            shortest_bond[0],
             vasprun.get_total_energy(),
             cputime,
             maxforce,

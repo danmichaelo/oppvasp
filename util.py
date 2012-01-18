@@ -7,32 +7,59 @@ try:
 except:
     print "Warning: lxml python package not found"
 
-def get_pairs(n):
+def get_pairs(n, indices = None, include_self = False):
     """
         Returns a list of all n*(n-1)/2 unordered pairs of numbers 0...n-1
         as a (n*(n-1)/2, 2) numpy array.
+            include_self : bool (default False)
+                Whether to check for bonds between an atom and its _own_ periodic image.
+                This is only needed for very small unit cells, typically with a single atom.
 
         Example: n = 5. 
-            # pairs: n(n+1)/2 = 10
+            # pairs: n(n-1)/2 = 10
 
             j | n-1-j | jsum  | indices | i,j pairs
             --|-------|-------|---------|----------------
-            0 |   4   |  0    | 0:3     | 1,0 2,0 3,0 4,0
-            1 |   3   |  3    | 4:6     | 2,1 3,1 4,1
-            2 |   2   |  5    | 7:8     | 3,2 4,2
-            3 |   1   |  6    | 9:9     | 4,3 
+            0 |   4   |  0    | 0:4     | 1,0 2,0 3,0 4,0
+            1 |   3   |  3    | 4:7     | 2,1 3,1 4,1
+            2 |   2   |  5    | 7:9     | 3,2 4,2
+            3 |   1   |  6    | 9:10    | 4,3 
 
+        Example: n = 5 with include_self = True
+            # pairs: (n+1)n/2 = 15
+
+            j |  n-j  | jsum  | indices | i,j pairs
+            --|-------|-------|---------|----------------
+            0 |   5   |   0   | 0:5     | 0,0 1,0 2,0 3,0 4,0
+            1 |   4   |   4   | 5:9     | 1,1 2,1 3,1 4,1
+            2 |   3   |   7   | 9:12    | 2,2 3,2 4,2
+            3 |   2   |   9   | 12:14   | 3,3 4,3 
+            4 |   1   |  10   | 14:15   | 4,4
     """
-    pairs = np.empty((n*(n-1)/2,2), dtype = int)
-    m = n-1
+    if indices == None:
+        indices = np.arange(n)
+    else:
+        indices = np.array(indices)
+    if include_self:
+        m = n
+    else:
+        m = n-1
+    pairs = np.empty((m*(m+1)/2,2), dtype = int)
     for j in xrange(m):
-        # jsum = sum(n-1-j, n-2)
-        jsum = j*(2*n-j-3)/2
+        if include_self:
+            # jsum = sum(n-j, n-1)
+            jsum = j*(2*n-j-1)/2
+        else:
+            # jsum = sum(n-1-j, n-2)
+            jsum = j*(2*n-j-3)/2
         #print jsum
         #print "j=%d" % j, " =>",j+isum,j+isum+(n-1-j)
         #print pairs[j+isum:j+isum+(n-1-j),1]
-        pairs[jsum+j:jsum+m,1] = j
-        pairs[jsum+j:jsum+m,0] = range(j+1,n)
+        pairs[jsum+j:jsum+m,1] = indices[j]
+        if include_self:
+            pairs[jsum+j:jsum+m,0] = indices[range(j,n)]
+        else:
+            pairs[jsum+j:jsum+m,0] = indices[range(j+1,n)]
     return pairs
 
 def unitcell_components(cell):
