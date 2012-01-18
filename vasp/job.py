@@ -86,30 +86,35 @@ class BatchJob(object):
         step.verbose = self.verbose
     
     def print_info(self):
+        """ Deprecated! Just print the object instead """
+        print self
+
+    def __repr__(self):
         """
         Print out some info about the job.
         """
-        print "-----------------------------"
-        print "Basedir: %s\nWorkdir: %s" % (self.basedir,self.workdir)
+        s = "<--------------------------[ BatchJob ]------------------------------>\n"
+        s += "Basedir: %s\nWorkdir: %s" % (self.basedir,self.workdir)
         for step in self.steps: 
-            print "[Step %d of %d]" % (step.index, len(self.steps))
-            step.preprocess_info()
+            s += "[Step %d of %d]\n" % (step.index, len(self.steps))
+            s += step.preprocess_info()
             prepfiles = []
             for f in step.input_files.keys():
                 if f != step[f]:
                     prepfiles.append("%s -> %s" % (step[f],f))
             if len(prepfiles) != 0:
-                print "  -> Copy %s" % ', '.join(prepfiles)
-            print "  -> %s" % (step.vaspcmd)
+                s += "  -> Copy %s\n" % ', '.join(prepfiles)
+            s += "  -> %s\n" % (step.vaspcmd)
             prepfiles = []
             for f in step.outlist:
                 if f != step[f]:
                     prepfiles.append("%s -> %s" % (f, step[f]))
             if len(prepfiles) != 0:
-                print "  -> Rename %s" % ', '.join(prepfiles)
+                s += "  -> Rename %s\n" % ', '.join(prepfiles)
             for task in step.post_processing_tasks:
-                print "  -> %s" % (task['desc'])
-        print "-----------------------------"
+                s += "  -> %s\n" % (task['desc'])
+        s += "<-------------------------------------------------------------------->"
+        return s
 
 
     def start(self, dry_run = False, first_step = 1):
@@ -305,9 +310,7 @@ class ManualBatchJob(BatchJob):
             # loop over input files (INCAR, KPOINTS, ...)
             for template_name in BatchStep.input_files.keys():
                 indexedname = step[template_name]
-                if template_name == 'POSCAR':
-                    pass
-                elif os.path.exists(indexedname):
+                if os.path.exists(indexedname):
                     # a unique file was found. That makes this step necessary.
                     step_necessary = True
                 elif len(self.steps) > 0:
@@ -449,7 +452,7 @@ class BatchStep(object):
         """
         This method is called from the print_info method
         """
-        pass
+        return ''
 
     def preprocess(self):
         """
@@ -544,9 +547,10 @@ class ManualBatchStep(BatchStep):
     def preprocess_info(self):
         if not os.path.isfile(self['POSCAR']):
             if self.index == 1:
-                print '  -> Copy POSCAR ->',self['POSCAR']
+                return '  -> Copy POSCAR -> %s\n' % self['POSCAR']
             else:
-                print '  -> Copy CONTCAR ->',self['POSCAR']
+                return '  -> Copy CONTCAR -> %s\n' % self['POSCAR']
+        return ''
 
     def preprocess(self):
         """

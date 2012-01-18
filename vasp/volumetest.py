@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Dec 18, 2011 02:09:07
+# Last modified: Jan 18, 2012 18:19:54
 #
 # Example usage:
 #
@@ -112,7 +112,7 @@ class VolumeTestStep(BatchStep):
         """
         This method is called from the print_info method
         """
-        print "  -> Update POSCAR with new lattice parameter:",str(self.latticeparameter)
+        return "  -> Update POSCAR with new lattice parameter: %.2f\n" % self.latticeparameter
 
     def preprocess(self):
         """
