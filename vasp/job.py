@@ -183,10 +183,22 @@ class BatchJob(object):
             print drift
         else:
             print "forces not found"
+            maxforce = -1
+
+        try:
+            pressure = vasprun.get_final_pressure()
+        except:
+            print "ERROR: Could not read pressure from vasprun"
+            pressure = -1
+
+        try:
+            maxdrift = vasprun.get_maxdrift()
+        except:
+            print "ERROR: Could not read max drift"
+            maxdrift = -1 
 
         cputime,realtime = vasprun.get_time_spent()
         print cputime
-        return
 
         summaryline = "%s\t%d\t%.3f\t%.4f\t%.0f\t%.4f\t%s\t%.4f" % (
             step.get_name(),
@@ -196,7 +208,7 @@ class BatchJob(object):
             cputime,
             maxforce,
             pressure,
-            outcar.get_max_drift()
+            maxdrift
         )
         sf = open(self.summaryfile,'a')
         sf.write(summaryline+"\n")

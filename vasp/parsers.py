@@ -352,7 +352,7 @@ class IonicStep(object):
     def get_pressure(self):
         stress = self.get_stress()
         return (stress[0,0] + stress[1,1] + stress[2,2])/3.0
-        
+    
     def get_structure(self):
         struc = self._node.xpath("structure")[0]
 
@@ -441,6 +441,10 @@ class VasprunParser(object):
     
     def get_final_pressure(self):
         return self.ionic_steps[-1].get_pressure()
+    
+    def get_maxdrift(self):
+        """ WHAT KIND OF DRIFT ? """
+        return -1
 
     def get_total_energy(self):
         print "VasprunParser: Method get_total_energy is deprecated! "+\
