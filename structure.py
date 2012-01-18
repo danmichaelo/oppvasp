@@ -33,6 +33,10 @@ class Structure(object):
         - forces 
         - velocities
     """
+
+    def __repr__(self):
+        f = ' with forces' if self.has_forces() else ' no forces'
+        return "%d atoms %s" % (self._positions.shape[0],f)
     
     def __init__(self, cell = [], positions = [], atomtypes = None, forces = None, velocities = None, coords = 'direct'):
         self.set_cell(cell)
@@ -133,20 +137,30 @@ class Structure(object):
         if coords[0].lower() == 'c':
             self._positions = cartesian_to_direct(self._positions, self._cell)
     
-    
+    def has_forces(self):
+        """ Does the Structure contain forces? """
+        return (self._forces != None)
+
     def get_forces(self, coords):
         """ (n,3) array """
+        if not self.has_forces():
+            return None
         if coords[0].lower() == 'd':
             return self._forces
         elif coords[0].lower() == 'c':
             return direct_to_cartesian(self._forces, self._cell)
 
-    def set_forces(self, vel, coords):
-        if type(vel).__name__ == 'ndarray':
-            self._forces = vel.copy()
-        elif type(vel).__name__ == 'list':
-            self._forces = np.array(vel)
-        elif type(vel).__name__ == 'NoneType':
+    def set_forces(self, forces, coords):
+        """
+        Parameters:
+            forces : (n,3) numpy array of forces on all atoms
+            coords : 'direct' or 'cartesian'
+        """
+        if type(forces).__name__ == 'ndarray':
+            self._forces = forces.copy()
+        elif type(forces).__name__ == 'list':
+            self._forces = np.array(forces)
+        elif type(forces).__name__ == 'NoneType':
             self._forces = None
         else:
             print "Error: forces must be a list or numpy array"

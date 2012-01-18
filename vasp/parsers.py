@@ -553,7 +553,15 @@ class VasprunParser(object):
 
     def get_final_structure(self):
         """ Returns the final structure as a oppvasp.Structure object. """
-        return self.get_named_structure('finalpos')
+        s = self.get_named_structure('finalpos')
+        if not s.has_forces():
+            forces = self.doc.xpath( "/modeling/calculation/varray[@name='forces']/v")
+            tmp = []
+            for force in forces:
+                tmp.append(([float(f) for f in force.text.split()]))
+            s.set_forces(np.array(tmp), 'direct')
+        return s
+    
 
     def get_final_positions(self):
         """

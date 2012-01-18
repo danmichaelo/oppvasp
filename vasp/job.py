@@ -169,12 +169,15 @@ class BatchJob(object):
         final_struct = vasprun.get_final_structure()
         shortest_bond = final_struct.get_shortest_bond()
         forces = final_struct.get_forces('c')
-        fx = np.sum(forces[:,0])
-        fy = np.sum(forces[:,1])
-        fz = np.sum(forces[:,2])
-        maxforce = np.max( np.sum(forces**2,axis=1) )
-        drift = (fz,fy,fz)
-        print drift
+        if forces != None:
+            fx = np.sum(forces[:,0])
+            fy = np.sum(forces[:,1])
+            fz = np.sum(forces[:,2])
+            maxforce = np.max( np.sum(forces**2,axis=1) )
+            drift = (fz,fy,fz)
+            print drift
+        else:
+            print "forces not found"
 
         cputime,realtime = vasprun.get_time_spent()
         print cputime
