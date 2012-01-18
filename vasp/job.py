@@ -168,7 +168,7 @@ class BatchJob(object):
 
         final_struct = vasprun.get_final_structure()
         shortest_bond = final_struct.get_shortest_bond()
-        forces = final_struct.get_forces()
+        forces = final_struct.get_forces('c')
         fx = np.sum(forces[:,0])
         fy = np.sum(forces[:,1])
         fz = np.sum(forces[:,2])
