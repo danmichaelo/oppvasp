@@ -10,7 +10,7 @@ import matplotlib
 matplotlib.use("pdf")
 
 import numpy as np
-from scipy import interpolate
+import scipy
 import matplotlib.pyplot as plt
 from scitools.std import seq
 
@@ -100,14 +100,16 @@ class PlotBands():
         k = 0.0
         
         if 'basis' in self.specialpoints: # If special points have been assigned
-            if self.specialpoints['basis'] == 'reciprocal' and basis == 'cartesian':
+            if self.specialpoints['basis'][0].lower() == 'r' and basis[0].lower() == 'c':
                 # Convert special points from reciprocal to cartesian basis:
+                print "[Debug] Converting special points from rec to cart"
                 specialPoints = { 'basis': 'cartesian', 'points': [] }
                 S = bandstruct['bandstructure'].getReciprocalLatticeVectors()
                 for sp in self.specialpoints['points']:
                     specialPoints['points'].append((sp[0],np.dot(S, sp[1])))
-            elif self.specialpoints['basis'] == 'cartesian' and basis == 'reciprocal':
+            elif self.specialpoints['basis'][0].lower() == 'c' and basis[0].lower() == 'r':
                 # Convert special points from cartesian to reciprocal basis:
+                print "[Debug] Converting special points from cart to rec"
                 specialPoints = { 'basis': 'reciprocal', 'points': [] }
                 S = bandstruct['bandstructure'].getReciprocalLatticeVectors()
                 invS = np.linalg.inv(S)
@@ -121,6 +123,7 @@ class PlotBands():
         
         for kpoint in kpoints:
             kvec = kpoint.getVector()
+            #print "kvec:",kvec
             k_vectors.append(kvec)
             if len(k_vectors) > 1:      # If not first k-vector:
                 dkvec = kvec - k_vectors[len(k_vectors)-2]
@@ -142,7 +145,8 @@ class PlotBands():
                     # e.g. [0,-1,0] should be considered equivalent to [0,0,1].
                     # For simplicity, we just compare the length of the vectors.
                     # This seems to work fine, but it MAY give erroneous results!
-                    if np.sqrt(np.dot(kvec,kvec)) == np.sqrt(np.dot(p[1],p[1])):
+                    #print "  ",np.sqrt(np.dot(kvec,kvec)),' || ',np.sqrt(np.dot(p[1],p[1]))
+                    if (abs(np.sqrt(np.dot(kvec,kvec)) - np.sqrt(np.dot(p[1],p[1]))) < 1.e-4):
                         newPoint = True
                         for op in self.k_axis_specialPoints:
                             if abs(op-k) < 0.0001:
@@ -156,7 +160,8 @@ class PlotBands():
         bandstruct['k_axis'] = k_axis
         bandstruct['E_axis'] = bands
     
-    def plotAndSaveToFile(self, outFile, yRange = [-4, 4], yTicks = [-4,4,1], basis='reciprocal'): 
+    def plotAndSaveToFile(self, outFile = 'bandstructure.pdf', yRange = [-4, 4], yTicks = [-4,4,1], 
+            basis = 'reciprocal', interpolate = True, silent_overwrite = False): 
 
         print "[+] Starting plotting procedure"
         
@@ -172,16 +177,20 @@ class PlotBands():
                 if len(kaxis) != len(np.unique(kaxis)):
                     raise Exception, "Uh oh, non-unique points on k-axis!"
                 
-                # Cubic-spline interpolation. We set s=0 for no smoothing.
-                # This ensures that the line passes through all points. 
-                # See http://www.tau.ac.il/~kineret/amit/scipy_tutorial/               
-                tck = interpolate.splrep(kaxis,band,s=0)                
-                xnew = np.arange(0,kaxis[-1],0.001)
-                ynew = interpolate.splev(xnew,tck,der=0)
+                pltoptions = { 'color': bandstruct['color'] }
                 if (bandstruct['label'] != "" and i == 0):
-                    plt.plot(xnew,ynew,color=bandstruct['color'],linestyle=bandstruct['linestyle'],label=bandstruct['label'], zorder=2)
+                    pltoptions['label'] =  bandstruct['label'] 
+                if interpolate:
+                    # Cubic-spline interpolation. We set s=0 for no smoothing.
+                    # This ensures that the line passes through all points. 
+                    # See http://www.tau.ac.il/~kineret/amit/scipy_tutorial/               
+                    tck = scipy.interpolate.splrep(kaxis,band,s=0)                
+                    xnew = np.arange(0,kaxis[-1],0.001)
+                    ynew = scipy.interpolate.splev(xnew,tck,der=0)
+                    plt.plot(xnew,ynew, zorder=2, linestyle=bandstruct['linestyle'], **pltoptions)
+                    plt.plot(kaxis,band,marker='d', markersize=5.0, color=bandstruct['color'], linewidth=0, zorder=3)
                 else:
-                    plt.plot(xnew,ynew,color=bandstruct['color'],linestyle=bandstruct['linestyle'], zorder=2)
+                    plt.plot(kaxis,band,marker='d', linestyle=bandstruct['linestyle'], markersize=5.0, zorder=2, **pltoptions)
                 # Alternative: Plot data directly:
                 # plt.plot(kaxis,band,'.')
                 
@@ -208,7 +217,7 @@ class PlotBands():
             plt.legend()
         
         # Write to file:
-        if os.path.exists(outFile):
+        if not silent_overwrite and os.path.exists(outFile):
             print "\nWARNING: The file \"%s\" already exists." % outFile
             if query_yes_no("         Do you want to overwrite it?") == 'no':
                 return
