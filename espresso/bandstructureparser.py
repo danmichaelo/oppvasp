@@ -43,9 +43,9 @@ class ParseBandStructure():
         so if reciprocal basis is request, we transform the components to the 
         reciprocal basis (b1,b2,b3):
         """
-        if basis == 'cartesian':
+        if basis[0].lower() == 'c':
             return self.bandstructure
-        elif basis == 'reciprocal':
+        elif basis[0].lower() == 'r':
             # Define transformation matrix to convert vectors from a 
             # cartesian (x,y,z) basis to a reciprocal (b1,b2,b3) basis. 
             # If x is a vector in the (x,y,z) basis and x' a vector

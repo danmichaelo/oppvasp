@@ -35,9 +35,9 @@ class ParseBandStructure():
         in reciprocal coordinates, using b1,b2,b3 as basis.
         VASP gives the k-vectors in the reciprocal basis, (b1,b2,b3).
         """
-        if basis == 'reciprocal':
+        if basis[0].lower() == 'reciprocal':
             return self.bandstructure
-        elif basis == 'cartesian':
+        elif basis[0].lower() == 'cartesian':
             # Define transformation matrix to convert vectors from a 
             # reciprocal basis to a cartesian basis. 
             # If x is a vector in the (x,y,z) basis and x' a vector
