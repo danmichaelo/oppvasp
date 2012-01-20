@@ -329,9 +329,13 @@ class IterativeVasprunParser(object):
 
 
 class IonicStep(object):
+
     def __init__(self, node, atoms):
         self._node = node
         self._atoms = atoms
+    
+    def get_node():
+        return self._node
     
     def get_total_energy(self):
         """Returns the total energy in electronvolt"""
@@ -342,17 +346,44 @@ class IonicStep(object):
             raise LookupError('Value not found')
     
     def get_stress(self):
-        """Returns stress matrix in kB"""
-        results = self._node.xpath( "varray[@name='stress']/v")
+        """Returns stress matrix"""
+        results = self._node.xpath("varray[@name='stress']/v")
         if results:
             return np.array([[float(x) for x in p.text.split()] for p in results])
         else:
             raise LookupError('Value not found')
 
     def get_pressure(self):
+        """ Returns the pressure in kilobar """
         stress = self.get_stress()
         return (stress[0,0] + stress[1,1] + stress[2,2])/3.0
-    
+
+    def get_eigenvalues(self):
+        """
+        Returns eigenvalues as a dictionary, containing a numpy array 
+        for each of the spins. 
+        
+        Example:
+        ----------------------------------------------
+        >>> e = vp.get_eigenvalues()['spin 1']
+        >>> print e.shape
+        <<< (20,4,2)      # (num kpoints, num bands, 2)
+        >>> eigenvalues = e[:,:,0]
+        >>> occupation = e[:,:,1]
+        """
+        sets = {}
+        for s in self._node.xpath("eigenvalues/array/set/set"):
+            set_name = s.get('comment') # 'spin 1' or 'spin 2'
+            sets[set_name] = []
+            for k in s.xpath('set'):
+                k_name = k.get('comment') # 'kpoint 1', 'kpoint 2', ...
+                eig = []
+                for r in k.xpath('r'):
+                    eig.append([float(t) for t in r.text.split()])  # two values: eigenvalue, occupation
+                sets[set_name].append(eig)
+            sets[set_name] = np.array(sets[set_name])
+        return sets
+
     def get_structure(self):
         struc = self._node.xpath("structure")[0]
 
@@ -442,6 +473,9 @@ class VasprunParser(object):
     def get_final_pressure(self):
         return self.ionic_steps[-1].get_pressure()
     
+    def get_eigenvalues(self):
+        return self.ionic_steps[-1].get_eigenvalues()
+
     def get_maxdrift(self):
         """ WHAT KIND OF DRIFT ? """
         return -1
@@ -471,7 +505,7 @@ class VasprunParser(object):
             raise LookupError('Value not found')
     
     def get_kpoints(self):
-        """Returns the number of k-points"""
+        """Returns an array containing the k-points in reciprocal coordinates"""
         results = self.doc.xpath( "/modeling/kpoints/varray[@name='kpointlist']/v")
         if results:
             return np.array([[float(x) for x in k.text.split()] for k in results])
