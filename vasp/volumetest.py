@@ -2,7 +2,7 @@
 #
 # @file volumetest.py @version 3
 # This file should be called by <jobfile.sh>
-# Last modified: Jan 18, 2012 18:19:54
+# Last modified: Feb 01, 2012 10:29:38
 #
 # Example usage:
 #
@@ -78,7 +78,7 @@ class VolumeTestCubicUnitCell(BatchJob):
 
         maxforce = np.max( np.sum(forces**2,axis=1) )
 
-        pressure = final_step.get_external_pressure()
+        pressure = final_step.get_pressure()
 
         cputime,realtime = vasprun.get_time_spent()
 
