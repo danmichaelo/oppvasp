@@ -358,31 +358,46 @@ class IonicStep(object):
         stress = self.get_stress()
         return (stress[0,0] + stress[1,1] + stress[2,2])/3.0
 
-    def get_eigenvalues(self):
+    def get_eigenvalues(self, include_occupation = False):
         """
-        Returns eigenvalues as a dictionary, containing a numpy array 
-        for each of the spins. 
+        Returns eigenvalues as a (s,n,e) shaped numpy array, where 
+            s is the number of spins (1 for spin unpolarized calculations, 2 otherwise)
+            n is the number of k-points
+            e is the number of bands
+        If include_occupation, occupation numbers are included as the last dimension
         
         Example:
         ----------------------------------------------
-        >>> e = vp.get_eigenvalues()['spin 1']
+        >>> e = vp.get_eigenvalues(include_occupation = True)
         >>> print e.shape
-        <<< (20,4,2)      # (num kpoints, num bands, 2)
-        >>> eigenvalues = e[:,:,0]
-        >>> occupation = e[:,:,1]
+        <<< (1,20,4,2)      # (num spins, num kpoints, num bands, 2)
+        >>> eigenvalues = e[0,:,:,0]
+        >>> occupation = e[0,:,:,1]
+
+        Spin-polarized calc:
+        ----------------------------------------------
+        >>> e = vp.get_eigenvalues()
+        >>> print e.shape
+        <<< (2,20,4)      # (num spins, num kpoints, num bands)
+        >>> spinup = e[0,:,:]
+        >>> spindown = e[1,:,:]
         """
-        sets = {}
+        sets = []
         for s in self._node.xpath("eigenvalues/array/set/set"):
             set_name = s.get('comment') # 'spin 1' or 'spin 2'
-            sets[set_name] = []
+            setx = []
             for k in s.xpath('set'):
                 k_name = k.get('comment') # 'kpoint 1', 'kpoint 2', ...
-                eig = []
+                eigs = []
                 for r in k.xpath('r'):
-                    eig.append([float(t) for t in r.text.split()])  # two values: eigenvalue, occupation
-                sets[set_name].append(eig)
-            sets[set_name] = np.array(sets[set_name])
-        return sets
+                    eig,occ = r.text.split()
+                    if include_occupation:
+                        eigs.append([float(eig),float(occ)])
+                    else:
+                        eigs.append(float(eig))
+                setx.append(eigs)
+            sets.append(setx)
+        return np.array(sets)
 
     def get_structure(self):
         struc = self._node.xpath("structure")[0]

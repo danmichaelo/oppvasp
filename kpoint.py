@@ -10,6 +10,9 @@ import numpy as np
 class KPoint():
 
     def __init__(self,x,y = 0,z = 0,eigenvals=[]):
+        """
+        Coordinates can be given either as a length-3 numpy array or as x,y,z separately
+        """
         if type(x).__name__ == 'ndarray':
             if x.ndim != 1 or x.size != 3:
                 raise StandardError("Vector must have dimension 1 and size 3")

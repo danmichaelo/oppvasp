@@ -578,6 +578,7 @@ class ManualBatchStep(BatchStep):
                 print "Copying CONTCAR to %s" % self['POSCAR']
         for f in BatchStep.input_files.keys():
             if self[f] != f:
+                print "[DEBUG] Copy %s -> %s" % (self[f], f)
                 shutil.copy2(self[f],f)
             #os.system("cp %s %s 2>/dev/null" % (self[f],f)) # if the files are identical, an error is sent to /dev/null
     def postprocess(self):
@@ -586,6 +587,7 @@ class ManualBatchStep(BatchStep):
         """
         for f in BatchStep.input_files.keys():
             if f != self[f]:
+                print "[DEBUG] Unlink %s" % (f)
                 os.unlink(f) # if we copy, say INCAR.1 to INCAR before a run, remove INCAR afterwards
 
     def get_name(self):
@@ -648,7 +650,8 @@ class BatchJobDataExtractor(object):
         The columns are just the values specified for <data_spect> in the constructor.
         The data in the sort column must be of a type that can be sorted with numpy.
         """
-        args = np.argsort(self.data[cname])
+        
+        args = np.argsort([np.linalg.norm(a) for a in self.data[cname]]) # requires numerical values!! what bout strings?
         for k in self.data:
             self.data[k] = self.data[k][args]
         #tmp = np.array(self.get_data_column(column))
@@ -690,9 +693,8 @@ class BatchJobDataExtractor(object):
 
         num_cols = len(self.data_spec)
         num_rows = len(jobs)
+        self.num_rows = num_rows
         self.data = {}
-        for spec in self.data_spec:
-            self.data[spec['name']] = np.zeros(num_rows)
         
         i = 0
         for index, files in sorted(jobs.items()):
@@ -715,9 +717,21 @@ class BatchJobDataExtractor(object):
                         print "switched from %s to %s for %s " % (oldparser,parser,fn)
                 extract_function = getattr(parser, fn)
                 if 'params' in spec:
-                    self.data[sname][i] = extract_function(*spec['params']) 
+                    res = extract_function(*spec['params']) 
                 else:
-                    self.data[sname][i] = extract_function() 
+                    res = extract_function()
+                if not sname in self.data:
+                    # initialize array with correct dimension:
+                    if type(res) == float or type(res) == np.float64:
+                        shape = (num_rows)
+                    elif type(res) == np.ndarray:
+                        shape = (num_rows, len(res))
+                    else:
+                        raise StandardError("Unknown type %s returned" % str(type(res)))
+                    self.data[spec['name']] = np.zeros(shape)
+                
+                #print res
+                self.data[sname][i] = res
                 #if 'type' in spec:
                 #    if self.data_spec[j]['type'] == 'float':
                 #        self.data[i][j] = float(self.data[i][j])
@@ -755,5 +769,5 @@ class BatchJobDataExtractor(object):
 
     def get_data_length(self):
         """Returns length of data array"""
-        return len(self.data)
+        return (self.num_rows)
 

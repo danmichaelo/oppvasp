@@ -25,7 +25,15 @@ def prepare_canvas(width = 350.0, height = 'auto', fontsize = 10, fontsize_small
                  Valid units are 'cm', 'pt', 'in'
     
     Example:
-        prepare_canvas( width = '7.2 cm' )
+        from oppvasp import plotutils
+        plotutils.prepare_canvas( width = '7.2 cm' )
+        import matplotlib.pyplot as plt  # import after prepare_canvas
+
+        fig = plt.figure()
+        ax1 = fig.add_axes([ 0.15, 0.15, 0.8, 0.8 ])
+        ... and so on
+        plt.savefig('out.pdf')
+        
     """
     
     inches_per_pt = 1.0/72.27 # According to TeX 

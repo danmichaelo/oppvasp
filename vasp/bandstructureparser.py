@@ -7,58 +7,81 @@
 import re,os,copy
 import numpy as np
 from oppvasp.kpoint import KPoint
+from oppvasp.bandstructure import BandStructure
+from oppvasp.vasp import parsers
 
-class ParseBandStructure():
-    '''
-    classdocs
-    '''
+def parse_espresso_bands(procar = '', eigenval='EIGENVAL', outcar = 'OUTCAR', vasprun = ''):
+    """
+    Specify either vasprun.xml, eigenval+outcar or procar+outcar
 
-    def __init__(self, procar = '', eigenval='EIGENVAL', outcar = 'OUTCAR'):
+    Returns:
+        oppvasp.bandstructure.Bandstructure object
+    """
+    parser = VaspBandParser(procar,eigenval,outcar,vasprun)
+    return parser.get_band_structure()
 
+class VaspBandParser():
+
+    def __init__(self, procar = '', eigenval='EIGENVAL', outcar = 'OUTCAR', vasprun = ''):
         self.bandstructure = []
         self.__successful = False
 
         print "[+] Parsing bandstructure from VASP"
         
-        self.__successful = self.readOUTCAR(outcar)
-        if self.__successful == True: 
-            self.__successful = self.readEIGENVAL(eigenval)
-        if self.__successful == True and procar != '': 
-            self.__successful = self.readPROCAR(procar)
+        #self.__successful = self.readOUTCAR(outcar)
+        #if self.__successful == True: 
+        #    self.__successful = self.readEIGENVAL(eigenval)
+        #if self.__successful == True and procar != '': 
+        #    self.__successful = self.readPROCAR(procar)
+        if vasprun != '':
+            vp = parsers.VasprunParser(vasprun)
+            self.k = vp.get_kpoints()
+            self.eig = vp.get_eigenvalues()
+    
+    def get_band_structure(self):
+        """
+        VASP gives the k-vectors in the cartesian basis, in units of ??? 
+        """
+        #bands = []
+        #for s in range(self.eig.shape[0]):
+        #    sbands = []
+        #    for idx,k in enumerate(self.k):
+        #        eigs = self.eig[s,:,idx]
+        #        sbands.append(KPoint(k, eigenvals = eigs))
+        #    bands.append(sbands)
+
+        return BandStructure(eigenvalues = self.eig, kpoints = self.k coords = 'cart', basis = self.crystalAxes)
+    
     
     def isValid(self):
+        """ DEPRECATED"""
         return self.__successful
     
-    def getBands(self, basis='reciprocal'):
-        """
-        Returns the bands with the k-points either in cartesian coordinates or 
-        in reciprocal coordinates, using b1,b2,b3 as basis.
-        VASP gives the k-vectors in the reciprocal basis, (b1,b2,b3).
-        """
-        if basis[0].lower() == 'reciprocal':
-            return self.bandstructure
-        elif basis[0].lower() == 'cartesian':
-            # Define transformation matrix to convert vectors from a 
-            # reciprocal basis to a cartesian basis. 
-            # If x is a vector in the (x,y,z) basis and x' a vector
-            # in the (b1,b2,b3) basis, the components are related by
-            # x = S x'
-            # We round off after four digits to avoid numerical noise
-            # preventing us from finding special points
-            S = self.reciprocalAxes
-            b = copy.deepcopy(self.bandstructure)
-            for kpoint in b:                
-                # dot(A,v) treats v as a column vector:
-                kpoint.setVector(np.dot(S,kpoint.getVector())) 
-            return b
-        else:
-            raise StandardError("Unknown basis requested")
+    #def getBands(self, basis='reciprocal'):
+    #    """
+    #    Returns the bands with the k-points either in cartesian coordinates or 
+    #    in reciprocal coordinates, using b1,b2,b3 as basis.
+    #    VASP gives the k-vectors in the reciprocal basis, (b1,b2,b3).
+    #    """
+    #    if basis[0].lower() == 'r':
+    #        return self.bandstructure
+    #    elif basis[0].lower() == 'c':
+    #        # Define transformation matrix to convert vectors from a 
+    #        # reciprocal basis to a cartesian basis. 
+    #        # If x is a vector in the (x,y,z) basis and x' a vector
+    #        # in the (b1,b2,b3) basis, the components are related by
+    #        # x = S x'
+    #        # We round off after four digits to avoid numerical noise
+    #        # preventing us from finding special points
+    #        S = self.reciprocalAxes
+    #        b = copy.deepcopy(self.bandstructure)
+    #        for kpoint in b:                
+    #            # dot(A,v) treats v as a column vector:
+    #            kpoint.setVector(np.dot(S,kpoint.getVector())) 
+    #        return b
+    #    else:
+    #        raise StandardError("Unknown basis requested")
 
-    def getDirectLatticeVectors(self):
-        return self.crystalAxes
-    
-    def getReciprocalLatticeVectors(self):
-        return self.reciprocalAxes
     
     def readKPointFromPROCAR(self, stream, bandsCount, ionsCount):
         
