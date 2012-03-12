@@ -426,6 +426,13 @@ class IonicStep(object):
             forces = None
 
         return Structure( cell = basis, atomtypes = self._atoms, positions = pos, velocities = vel, forces = forces, coords = 'direct' )
+    
+    def get_time_spent(self):
+        """
+        Returns calculation time spent in seconds as tuple (CPU time user, CPU time total)
+        """
+        stepcpu, stepreal = self._node.xpath("time[@name='totalsc']")[0].text.split()
+        return (float(stepcpu), float(stepreal))
 
 class VasprunParser(object):
     """
@@ -720,14 +727,16 @@ class VasprunParser(object):
         vasprun.xml sum: 157937, 162259
         OUTCAR: 157943, 162261
         """
-        calc = self.doc.xpath( "/modeling/calculation" )
         cputime = 0.0
         realtime = 0.0
-        for c in calc:
-            stepcpu, stepreal = [float(t) for t in c.xpath("time[@name='totalsc']")[0].text.split()]
-            #print stepcpu
-            cputime += stepcpu
-            realtime += stepreal
+        for step in self.ionic_steps:
+            t1,t2 = step.get_time_spent()
+        #calc = self.doc.xpath( "/modeling/calculation" )
+        #for c in calc:
+        #    stepcpu, stepreal = [float(t) for t in c.xpath("time[@name='totalsc']")[0].text.split()]
+        #    #print stepcpu
+            cputime += t1
+            realtime += t2
         return cputime, realtime
 
 
