@@ -132,6 +132,7 @@ class BatchJob(object):
             Default is 1 (the first step).
         """
 
+        print "[DEBUG] Chdir to %s" % (self.basedir)
         os.chdir(self.basedir)
 
         # Initialize summary file
@@ -493,34 +494,42 @@ class BatchStep(object):
         """
 
         # Prepare for the current run
+        print "[DEBUG] Preprocess" 
         self.preprocess()
 
         # (Re-)Distribute files to all nodes:
         if self.workdir != '':
-            os.system("%s %s/* %s/" % (self.distributecmd,self.basedir, self.workdir))
+            cmd = '%s %s/* %s/' % (self.distributecmd,self.basedir, self.workdir)
+            print "[DEBUG] Distribute files: "+cmd
+            os.system(cmd)
 
         # Move to workdir:
         if self.workdir != '':
+            print "[DEBUG] Chdir to %s" % (self.workdir)
             os.chdir(self.workdir)
 
         # Run VASP:
+        print "[DEBUG] Run vasp as: %s" % (self.vaspcmd)
         exit_code = os.system(self.vaspcmd)
         if exit_code != 0:
             print "VASP excited with exit code",exit_code
             sys.exit(1)
         
         # Move back to basedir:
+        print "[DEBUG] Chdir to %s" % (self.basedir)
         os.chdir(self.basedir)
 
         # Move files back
         if self.workdir != '':
-            os.system('cp -Rupf %s/* %s/ ' % (self.workdir, self.basedir))
+            cmd = 'cp -Rupf %s/* %s/ ' % (self.workdir, self.basedir)
+            print "[DEBUG] Move files back: "+cmd
+            os.system(cmd)
 
         # Rename output files we want to save
         for f in self.outlist:
             if os.path.isfile(f):
                 if self.verbose:
-                    print "Renaming %s to %s" % (f, self[f])
+                    print "[DEBUG] Renaming %s to %s" % (f, self[f])
                 os.rename(f,self[f])
 
         # More postprocess tasks, if any
