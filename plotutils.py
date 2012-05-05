@@ -83,7 +83,8 @@ def prepare_canvas(width = 350.0, height = 'auto', fontsize = 10, fontsize_small
         'top'    : 0.93
         })
     rc('lines', linewidth=lw)
-    rc('font', family='serif', serif=['Latin Modern Roman','Palatino'], size=fontsize)
+    #rc('font', family='serif', serif=['Latin Modern Roman','Palatino'], size=fontsize)
+    rc('font', size=fontsize, family='serif')
     rc('text', usetex=False)
     rc('legend', fontsize=fontsize)
     rc('axes', labelsize=fontsize)
@@ -198,7 +199,7 @@ class DisplacementPlot(object):
         if not 'pop' in dir(trajectories):
             trajectories = [trajectories]
         for traj in trajectories:
-            traj.r2 = traj.get_displacements_squared(coordinates = 'cartesian')  # displacement r^2
+            traj.r2 = traj.get_displacements_squared( coords = 'cartesian' )  # displacement r^2
             traj.avg_r2 = np.sum(traj.r2, axis=1) / traj.num_atoms       # displacement r^2 averaged over all atoms
         self.trajs = trajectories
         
@@ -256,7 +257,7 @@ class DisplacementPlot(object):
                 y = np.sqrt(y)
                 self.ax1.set_ylabel(ur'$\Delta r$ [Å]')
         elif what == 'x' or what == 'y' or what == 'z':
-            r = traj.get_displacements( coordinates = 'cartesian' )  # displacement vectors
+            r = traj.get_displacements( coords = 'cartesian' )  # displacement vectors
             if atom_no == -1:
                 raise ValueError("averaging not implemented")
             else:
