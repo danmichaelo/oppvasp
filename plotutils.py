@@ -9,7 +9,6 @@ from copy import copy
 from scipy.optimize import leastsq
 
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
-from oppvasp.md import Trajectory 
 
 from matplotlib import rc
 import matplotlib.pyplot as plt
@@ -107,7 +106,7 @@ def get_minmax(sets):
             ma = ma0
     return mi,ma
 
-def symmetric_running_mean(data, n):
+def symmetric_running_mean(data, n, edgehandling = 'asymmetric'):
     """
     Calculates a symmetric running mean over the first axis (typically the time axis) 
     in a dataset 'data', in order to smooth out short-term fluctuations and highlight 
@@ -118,6 +117,8 @@ def symmetric_running_mean(data, n):
     
     No true running mean therefore exists for the first n steps and the last n steps. 
     In these ranges
+
+    edgehandling : either 'symmetric' or 'asymmetric'
 
     >>> data = np.ones((100,3)) * 5 * np.random.rand(100,3)
     >>> data[:,0] += np.arange(100)*.5
@@ -132,10 +133,22 @@ def symmetric_running_mean(data, n):
     current_avg = running_avg[0]
     for i in np.arange(data.shape[0]): 
         if i <= n: # No true symmetric average exists for the first n values..
-            current_avg = np.mean(data[0:1+2*i],axis=0) # assymetric mean, increase size of subset gradually until reaching the desired size
+            # increase sample size gradually until reaching the desired size
+            if edgehandling == 'symmetric':
+                # symmetric mean makes the initial position correct, but results in large initial fluctuations
+                current_avg = np.mean(data[0:1+2*i],axis=0) 
+            else:
+                # asymmetric mean is more stable, but the initial position will be off
+                current_avg = np.mean(data[0:i+n], axis=0)
         elif i >= data.shape[0]-n: # no symmetric average exists for the last n values
+            # decrease sample size gradually
             r = 2*(data.shape[0]-i)
-            current_avg = np.mean(data[-r:],axis=0) # assymetric mean, decrease size of subset gradually until reaching zero 
+            if edgehandling == 'symmetric':
+                # symmetric mean, decrease size of subset gradually until reaching 1
+                current_avg = np.mean(data[-r:],axis=0) 
+            else:
+                # asymmetric mean, decrease size of subset gradually until reaching ''n''+1
+                current_avg = np.mean(data[i-1-n:],axis=0) 
         else:
             current_avg = current_avg - data[i-1-n]/(2*n+1) + data[i+n]/(2*n+1) # update symmetric running mean
         running_avg[i] = current_avg
@@ -183,8 +196,17 @@ class DisplacementPlot(object):
         
         Examples
         ----------
-        >>> from oppvasp.vasp.parsers import read_trajectory
-        >>> traj = read_trajectory(unwrap_pbcs = True)
+        >>> import os
+        >>> from oppvasp.trajectory import Trajectory
+        >>> from oppvasp.vasp.parsers import PoscarParser, IterativeVasprunParser
+        >>>
+        >>> if os.path.isfile('trajectory_unwrapped.npz'):
+        >>>     traj = Trajectory('trajectory.npz')
+        >>> else:
+        >>>     traj = IterativeVasprunParser('vasprun.xml').get_trajectory()
+        >>>     traj.unwrap_pbc( init_pos = PoscarParser('POSCAR').get_positions(coords='d') )
+        >>>     traj.save('trajectory_unwrapped.npz')
+        >>>
         >>> # To only plot the part from step 10000 to step 20000:
         >>> traj.set_selection(10000, 20000)
         >>> 

@@ -153,19 +153,37 @@ def direct_to_cartesian(positions, basis):
     
     # Alternative 1
     #pos = np.array([np.dot(p,b) for p,b in zip(positions, basis)]) # there is surely some faster way!
+
+    if basis.ndim == 3:
+        # time-dependent basis
     
-    # Alternative 2 is about 10 times faster than alternative 1
-    pos = np.zeros(positions.shape)
-    if pos.ndim == 3:
-        i = 0
-        for p,b in zip(positions,basis):
-            pos[i] = np.dot(p,b)
-            i += 1
-    elif pos.ndim == 2:
-        # single coordinate set
-        pos = np.dot(positions, basis)
+        # Alternative 2 is about 10 times faster than alternative 1
+        pos = np.zeros(positions.shape)
+        if pos.ndim == 2 or pos.ndim == 3:
+            i = 0
+            for p,b in zip(positions,basis):
+                pos[i] = np.dot(p,b)
+                i += 1
+        #elif pos.ndim == 2:
+            # single coordinate set
+            # for some reason, this is really slow:
+            #   pos = np.dot(positions, basis)
+
+        else:
+            raise GeneralError("positions is of wrong dimensions")
+    
     else:
-        raise GeneralError("positions is of wrong dimensions")
+
+        if np.allclose(basis[[0,0,1,1,2,2],[1,2,0,2,0,1]],np.zeros(6)):
+            # orthorhombic
+            if np.allclose(s.diagonal()):
+                # cubic
+                pos = positions * basis[0,0]
+            else:
+                print "not supported yet"
+        else:
+            print "not supported yet"
+
     
     # Alternative 3: if the cell is static (3 x 3 instead of nsteps x 3 x 3):
     # perhaps we can use tensordot anyway? I'm not sure.
