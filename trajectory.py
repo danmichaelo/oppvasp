@@ -1,13 +1,16 @@
 # -*- coding: utf-8; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
 # vim:fenc=utf-8:et:sw=4:ts=4:sts=4:tw=0
 
-import sys
+import os,sys
 import numpy as np
 #import scipy as sp
+
+import tables
 
 import time
 import oppvasp
 
+from oppvasp import direct_to_cartesian
 from oppvasp import elements
 from oppvasp.structure import Structure
 from oppvasp.util import unitcell_components
@@ -23,11 +26,25 @@ except ImportError:
 
 
 class Trajectory(object):
+    """
+    The Trajectory class holds positions, forces, kinetic and total energy 
+    for a number of atoms over a number of time frames.
 
-    def __init__(self, num_steps = 0, filename = '', timestep = 1., atoms = []):
+    Positions and forces are stored internally as `direct' coordinates with respect 
+    to a unit cell, that may change over time (the unit cell is specified per frame).
+
+    The information is saved and read natively using the Numpy npz binary format,
+    or exported to the vtf format for use with the VMD viewer.
+
+    The class provides some simple manipulation methods.
+    """
+
+    def __init__(self, filename = '', num_steps = 0, timestep = 1., atoms = []):
         if filename != '':
             self.load(filename)
         else:
+            if len(atoms) == 0:
+                raise StandardError("No filename or atoms specified")
             self.atoms = atoms
             #self.num_atoms = atoms.shape[0]
             self._time = np.zeros(num_steps)
@@ -37,10 +54,8 @@ class Trajectory(object):
             self._positions = np.zeros((num_steps, self.num_atoms, 3))
             self._forces = np.zeros((num_steps, self.num_atoms, 3))
             self.set_timestep(timestep)
-            print "Allocated %.2f MB" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
+            print "Allocated %.2f MB for Trajectory object" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
         # Set default selection to the whole trajectory:
-        self.in_point = 0
-        self.out_point = self.length
 
     def update_length(self, new_length):
         if new_length < self.length:
@@ -52,43 +67,75 @@ class Trajectory(object):
             self.basis = self.basis[0:new_length]
             self._positions = self._positions[0:new_length]
             self._forces = self._forces[0:new_length]
-    
-    def set_selection(self, in_point = 0, out_point = -1):
+
+    def get_selection(self, start = 0, stop = 0, step = 1):
         """
-        Selects a part of the trajectory. Once a part of the trajectory has been selected, 
-        only that part of the trajectory is considered by the various functions in this class.
-        To clear the selection, just call set_selection with no arguments.
+        Returns a part of the trajectory as a new Trajectory object. 
 
         Parameters
         ----------
-        in_point : int
-            The frame number to mark the beginning of the selection
-            Default is 0
-        out_point : int
-            The frame number to mark the end of the selection
-            Default is -1
+        start : int
+            Start of interval. The interval includes this value.
+            The default start value is 0.
+        stop : int
+            End of interval.  The interval does not include this value.
+            The default stop value is 0, which will evaluate as including the last frame.
+        step : int
+            Spacing between values.  For any output `out`, this is the distance
+            between two adjacent values, ``out[i+1] - out[i]``. 
+            The default step size is 1.
 
         Examples
         ----------
-        >>> traj = Trajectory( filename = 'trajectory.npz' )
-        >>> traj.set_selection(10000, 20000)
-        >>> d = traj.get_displacements()
-        >>> t = traj.time   # getter function returns the correct interval
+        >>> traj = Trajectory( 'trajectory.npz' )
+        >>> sel = traj.get_selection(10000, 20000)
+        >>> d = sel.get_displacements()
+        >>> t = sel.time
         >>> plt.plot(t,d)
 
         """
-        self.in_point = in_point
-        if out_point == -1:
-            out_point = self.length # to include the very last element
-        self.out_point = out_point
+
+        if stop == 0:
+            stop = self.nsteps
+        p = self._positions[start:stop:step]
+        nsteps = p.shape[0]
+        t = Trajectory( num_steps = nsteps, atoms = self.atoms ) 
+        t.set_timestep(self.time[1]-self.time[0])
+        t.positions = p
+        t.forces = self._forces[start:stop:step]
+        t.basis = self.basis[start:stop:step]
+        t.total_energy = self.total_energy[start:stop:step]
+        t.kinetic_energy = self.kinetic_energy[start:stop:step]
+        return t
     
+    def set_selection(self, in_point = 0, out_point = -1):
+        raise DeprecationWarning("set_selection is deprecated. Use get_selection instead")
+        #self.in_point = in_point
+        #if out_point == -1:
+        #    out_point = self.length # to include the very last element
+        #self.out_point = out_point
+        
+
+
+
+
     #------------------- Begin Properties -------------------------------
+
+    @property
+    def natoms(self):
+        """number of atoms"""
+        return self.atoms.shape[0]
 
     @property
     def num_atoms(self):
         """number of atoms"""
         return self.atoms.shape[0]
         #return self._positions.shape[1]
+
+    @property
+    def nsteps(self):
+        """number of frames"""
+        return self._time.shape[0]
 
     @property
     def length(self):
@@ -98,7 +145,7 @@ class Trajectory(object):
     @property
     def time(self):
         """nsteps array"""
-        return self._time[self.in_point:self.out_point]
+        return self._time
     
     @time.setter
     def time(self,val):
@@ -112,7 +159,7 @@ class Trajectory(object):
         """
         nsteps x natoms x 3 array containing the direct coordinates of all atoms for all steps
         """
-        return self._positions[self.in_point:self.out_point]
+        return self._positions
 
     @positions.setter
     def positions(self, val):
@@ -129,7 +176,7 @@ class Trajectory(object):
         """
         nsteps x natoms x 3 array containing the forces on all atoms for all steps
         """
-        return self._forces[self.in_point:self.out_point]
+        return self._forces
 
     @forces.setter
     def forces(self, val):
@@ -162,33 +209,92 @@ class Trajectory(object):
 
     #------------------- End Properties -------------------------------
 
-    def save(self, filename):
-        """ 
-        Saves the trajectory to a *.npz binary file using numpy.savez 
-        """
-        np.savez(filename, basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, pos = self._positions, 
-            forces = self._forces, time = self._time, atoms = self.atoms)
+    def save(self, filename, save_forces = False):
+        """ Saves the trajectory to a hdf5 binary file using PyTables """
+
+        # not sure if 8 bytes is correct on all systems
+        mbperfloat = 8./1024**2
+
+        b1 = self.nsteps * mbperfloat
+        b2 = b1 * self.natoms * 3
+
+        print "Approximate size needed:"
+        print "  positions: %.2f MB" % (b2)
+        if save_forces:
+            print "  forces: %.2f MB" % (b2)
+        print "  ekin: %.2f MB" % b1
+        print "  etot: %.2f MB" % b1
+        print "  time: %.2f MB" % b1
+        print "  unit cell: %.2f MB" % (b1*3)
+        if save_forces:
+            print " Total: %.2f MB" % (6*b1 + 2*b2)
+        else:
+            print " Total: %.2f MB" % (6*b1 + b2)
+        
+
+        ext = os.path.splitext(filename)[1]
+        if ext == '.h5':
+            h5file = tables.openFile(filename, mode='w', title='Oppvasp Trajectory File')
+            h5file.createArray(h5file.root, 'basis', self.basis)
+            h5file.createArray(h5file.root, 'positions', self._positions)
+            if save_forces:
+                h5file.createArray(h5file.root, 'forces', self._forces)
+            h5file.createArray(h5file.root, 'time', self._time)
+            h5file.createArray(h5file.root, 'atoms', self.atoms)
+            h5file.createArray(h5file.root, 'ekin', self.kinetic_energy)
+            h5file.createArray(h5file.root, 'etot', self.total_energy)
+            h5file.close()
+        elif ext == '.npz':
+            if save_forces:
+                np.savez(filename, 
+                    basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, 
+                    pos = self._positions, forces = forces,
+                    time = self._time, atoms = self.atoms)
+            else:
+                np.savez(filename, 
+                    basis = self.basis, tote = self.total_energy, kine = self.kinetic_energy, 
+                    pos = self._positions, 
+                    time = self._time, atoms = self.atoms)
+        else:
+            raise StandardError("Unknown file extension!")
+
         print "Wrote trajectory (%d atoms, %d steps) to %s" % (self.num_atoms, self.length, filename)
 
     def load(self, filename):
-        """ 
-        Loading the trajectory from a *.npz numpy binary file using numpy.load 
-        """
-        npz = np.load(filename)
-        self._time = npz['time']
-        self.atoms = npz['atoms']
-        self.basis = npz['basis']
-        self.total_energy = npz['tote']
-        self.kinetic_energy = npz['kine']
-        self._positions = npz['pos']
-        if 'forces' in npz:
-            self._forces = npz['forces']
-        else:
-            print "This file does not contain forces"
-            self._forces = np.zeros(self._positions.shape) # waste of memory
-        #self.length = self._positions.shape[0]
-        print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
+        """ Reads trajectory from a hdf5 binary file using PyTables or a Numpy npz file"""
 
+        ext = os.path.splitext(filename)[1]
+        if ext == '.h5':
+            h5file = tables.openFile(filename, mode='r')
+            self._time = h5file.getNode(h5file.root, 'time').read()
+            self.atoms = h5file.getNode(h5file.root, 'atoms').read()
+            self.basis = h5file.getNode(h5file.root, 'basis').read()
+            self.total_energy = h5file.getNode(h5file.root, 'etot').read()
+            self.kinetic_energy = h5file.getNode(h5file.root, 'ekin').read()
+            self._positions = h5file.getNode(h5file.root, 'positions').read()
+            try:
+                self._forces = h5file.getNode(h5file.root, 'forces').read()
+            except tables.NoSuchNodeError:
+                print "This file does not contain forces"
+                self._forces = np.zeros(self._positions.shape) # waste of memory
+        elif ext == '.npz':
+            npz = np.load(filename)
+            self._time = npz['time']
+            self.atoms = npz['atoms']
+            self.basis = npz['basis']
+            self.total_energy = npz['tote']
+            self.kinetic_energy = npz['kine']
+            self._positions = npz['pos']
+            if 'forces' in npz:
+                self._forces = npz['forces']
+            else:
+                print "This file does not contain forces"
+                self._forces = np.zeros(self._positions.shape) # waste of memory
+            #self.length = self._positions.shape[0]
+        else:
+            raise StandardError("Unknown file extension!")
+
+        print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
 
     def unwrap_pbc(self, remove_drift = True, init_pos = None):
         """ 
@@ -216,7 +322,7 @@ class Trajectory(object):
         >>> pp = PoscarParser('POSCAR')
         >>> init_pos = pp.get_positions()
         >>> vp = IterativeVasprunParser('vasprun.xml')
-        >>> traj = vp.get_all_trajectories()
+        >>> traj = vp.get_positions()
         >>> traj.save('trajectory.npz')
         >>> traj.unwrap_pbc( init_pos = init_pos )
         >>> traj.save('trajectory_unwrapped.npz')
@@ -315,52 +421,55 @@ class Trajectory(object):
         return geo
 
     
-    def get_single_particle_trajectory(self, atom_no, coords = 'direct'):
-        """
-        Returns the trajectory of a single atom in direct or cartesian coordinates
-        as a numpy array of dimension (steps, 3).
+    #def get_single_particle_trajectory(self, atom_no, coords = 'direct'):
+    #    """
+    #    Returns the trajectory of a single atom in direct or cartesian coordinates
+    #    as a numpy array of dimension (steps, 3).
 
-        Parameters
-        ----------
-            coords : either 'direct' or 'cartesian'
-        """
-        pos = self.positions[:,atom_no,:]
-        if coords == 'cartesian':
-            pos = oppvasp.direct_to_cartesian(pos, self.basis)
-        return pos
+    #    Parameters
+    #    ----------
+    #        coords : either 'direct' or 'cartesian'
+    #    """
+    #    pos = self.positions[:,atom_no,:]
+    #    if coords == 'cartesian':
+    #        pos = oppvasp.direct_to_cartesian(pos, self.basis)
+    #    return pos
 
 
-    def get_all_trajectories(self, coords = 'direct'):
+    def get_positions(self, coords = 'direct', atom_no = -1):
         """
-        Returns the trajectories for all the atoms in direct or cartesian coordinates
-        as a numpy array of dimension (steps, atoms, 3).
+        Returns positions for one (atom_no>=0) or all (atom_no=-1) atoms 
+        in direct or cartesian coordinates as a numpy array 
+        of dimension (steps, atoms, 3).
+        
         Parameters:
-            - coords : either 'direct' or 'cartesian'
+            - coords    : either 'direct' or 'cartesian'
+            - atom_no   : (int) Set this to only return positions for a single atom.
         """
+        
+        if atom_no == -1: 
+            p = self.positions.copy()
+        else:
+            p = self.positions[:,atom_no,:].copy()
+
         if coords[0].lower() == 'd':
-            return self.positions
+            return p
         elif coords[0].lower() == 'c':
-            if 'positions_cart' in dir(self):
-                return self.positions_cart
-            else:
-                pos = oppvasp.direct_to_cartesian(self.positions, self.basis)
-                # This conversion is currently stupidly slow, so we cache the cartesian coordinates
-                # as a temporary solution until a faster algorithm is implemented
-                self.positions_cart = pos
-                return pos
+            return direct_to_cartesian(p, self.basis)
 
 
     def get_coordinates(self, coords = 'direct'):
         """
         Returns the coordinates$r(t)$ as a numpy array of shape (#steps, #atoms, 3)
         """
-        return self.get_all_trajectories(coords)
+        raise DeprecationWarning("get_coordinates is deprecated. Use get_positions instead")
+        return self.get_positions(coords)
     
     def get_displacements(self, coords = 'direct'):
         """
         Returns the displacements $r(t)-r(0)$ as a numpy array of shape (#steps, #atoms, 3)
         """
-        pos = self.get_all_trajectories(coords)
+        pos = self.get_positions(coords)
         return pos - pos[0]
 
 
@@ -380,13 +489,15 @@ class Trajectory(object):
 
     def get_velocities(self, coords = 'direct', algorithm = 'naive'):
         """
-        Returns velocities as a (nsteps,natom,3) array
+        Calculates velocities from the change in positions between adjacent frames.
+        Returns a (nsteps,natom,3) array
+
         Parameters:
          - coords : 'direct' returns velocities in [direct coordinates]/[timestep]
                         'cartesian' returns velocities in Å/s
         """
         timestep = self.time[1]-self.time[0]
-        pos = self.get_all_trajectories(coords)
+        pos = self.get_positions(coords)
         vel = np.zeros(pos.shape)
 
         pbar = ProgressBar(widgets=['Calculating velocities...',Percentage()], maxval = vel.shape[0]).start()
@@ -451,6 +562,10 @@ class Trajectory(object):
            
         pbar.finish()
         return occupancies, inhabitants
+
+    #def get_nearest_sites(reference_poscar, atomid, resolution = 50, treshold = 0.2):
+
+
 
     def add_periodic_images(self, rx = [-1,0], ry = [-1,0], rz = [-1,0] ):
 

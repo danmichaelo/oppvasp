@@ -20,7 +20,7 @@ import numpy as np
 
 import oppvasp
 from oppvasp import get_atomic_number_from_symbol
-from oppvasp.md import Trajectory
+from oppvasp.trajectory import Trajectory
 from oppvasp.structure import Structure
 
 # Optional:
@@ -47,69 +47,6 @@ try:
     imported['psutil'] = True
 except ImportError:
     print "Info: Module 'psutil' is not available"
-
-
-def read_trajectory(dir = '', xml_file ='vasprun.xml', npz_pbc_file = 'trajectory_pbc.npz', 
-        npz_file = 'trajectory_nopbc.npz', poscar_file = '', unwrap_pbcs = False):
-    """
-    This function will read a trajectory from the vasprun.xml file given as xml_file and save 
-    the trajectory as a NumPy npz cache file npz_pbc_file. The function will then unwrap the 
-    periodic boundary conditions and save the trajectory for the unwrapped trajectory as a 
-    new NumPy npz cache file npz_file.
-
-    The function will check if a npz file exists, and if it does, read the npz cache instead of the 
-    vasprun.xml file. This is *much* faster.
-
-    If POSCAR_file is specified, the initial positions will be read from this file. This may be 
-    useful for some visualization purposes. While coordinates in POSCAR (and CONTCAR) may be 
-    negative, the coordinates in vasprun.xml and XDATCAR are always wrapped around to become positive.
-
-    Parameters
-    ----------
-    dir : str
-        Directory to read files from
-        Default is current directory
-    xml_file : str
-        Filename of vasprun.xml file
-        Default is 'vasprun.xml'
-    npz_pbc_file : str
-        Filename of the npz cache file to write. 
-        Set to blank to disable writing of this file.
-        Default is 'trajectory_pbc.npz'
-    npz_file : str
-        Filename of the npz cache file to write with periodic boundary conditions (PBCs) unwrapped. 
-        Set to blank to disable the writing of this file.
-        Default is 'trajectory_nopbc.npz'
-    poscar_file : str
-        Filename of poscar file to get ideal lattice sites from. If given, this will be used upon 
-        unwrapping the periodic boundary conditions (PBCs).
-        Default is '' 
-    unwrap_pbcs : bool
-        Set to True to unwrap the periodic boundary conditions (PBCs) or False to leave them.
-        Default is False 
-    """
-
-    if unwrap_pbcs and os.path.isfile(dir + npz_file):
-        traj = Trajectory(filename = dir +npz_file)
-    elif not unwrap_pbcs and os.path.isfile(dir + npz_pbc_file):
-        traj = Trajectory(filename = dir +npz_pbc_file)
-    else:
-        p = IterativeVasprunParser(dir + xml_file)
-        traj = p.get_all_trajectories()
-        if  npz_pbc_file != '':
-            traj.save(dir + npz_pbc_file)
-        if unwrap_pbcs:
-            if poscar_file != '':
-                poscar = PoscarParser(dir + poscar_file)
-                pos = poscar.get_positions( coords = 'direct' )
-                print "Unwrapping using given initial pos"
-                traj.unwrap_pbc( init_pos = pos)
-            else:
-                traj.unwrap_pbc()
-            if npz_file != '':
-                traj.save(dir + npz_file)
-    return traj
-
 
 def ZapControlCharacters(filename):
     print "Document contains control characters that break the parser!"
@@ -286,6 +223,7 @@ class IterativeVasprunParser(object):
         #print pos
 
     def _get_trajectories(self):
+        """ Internal method to make a Trajectory object """
         atoms = self.get_atoms()
         self.trajectory = Trajectory(num_steps = self.nsw, timestep = self.potim, atoms = atoms)
         self.step_no = 0
@@ -308,24 +246,18 @@ class IterativeVasprunParser(object):
         print "Found %d out of %d steps" % (self.step_no,self.nsw)
         self.trajectory.update_length(self.step_no)
         print_memory_usage()
-
-    def get_all_trajectories(self):
+    
+    def get_trajectory(self):
         """
-        get trajectories of all atoms
+        Returns a oppvasp.trajectory.Trajectory object
         """
         self.atom_no = -1
         self._get_trajectories()
         return self.trajectory
 
-    def get_single_trajectory(self, atom_no):
-        """
-        Returns a single trajectory as (stepno, 3) array
-        The index of the first atom is 0.
-        """
-        self.atom_no = atom_no
-        self._get_trajectories()
-        self.traj['positions'] = self.traj['atoms'][0]['positions']
-        return self.trajectory
+    def get_all_trajectories(self):
+        print "DEPRECATED: get_all_trajectories is deprectated! Use get_trajectory instead"
+        return self.get_trajectory()
 
 
 class IonicStep(object):
