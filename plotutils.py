@@ -10,8 +10,6 @@ from scipy.optimize import leastsq
 
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 
-from matplotlib import rc
-import matplotlib.pyplot as plt
 # print matplotlib.__version__
 
 def prepare_canvas(width = 350.0, height = 'auto', fontsize = 10, fontsize_small = 8, lw = 0.5): 
@@ -34,6 +32,7 @@ def prepare_canvas(width = 350.0, height = 'auto', fontsize = 10, fontsize_small
         plt.savefig('out.pdf')
         
     """
+    from matplotlib import rc
     
     inches_per_pt = 1.0/72.27 # According to TeX 
     inches_per_cm = 1.0/2.54  # 
@@ -227,6 +226,9 @@ class DisplacementPlot(object):
         
         prepare_canvas('10 cm') 
         p = [0.15, 0.15, 0.05, 0.05]  # margins: left, bottom, right, top. Height: 1-.15-.46 = .39
+
+
+        import matplotlib.pyplot as plt
         self.fig = plt.figure()
         self.ax1 = self.fig.add_axes([ p[0], p[1], 1-p[2]-p[0], 1-p[3]-p[1] ])
         self.ax1.grid(True, which='major', color = 'gray', alpha = 0.5)

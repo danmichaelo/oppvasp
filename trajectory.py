@@ -296,7 +296,7 @@ class Trajectory(object):
 
         print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
 
-    def unwrap_pbc(self, remove_drift = True, init_pos = None):
+    def unwrap_pbc(self, remove_numerical_noise = False, init_pos = None):
         """ 
         Unwraps periodic boundary conditions (PBCs)
         Note that this procedure produces coordinates outside the unit cell. 
@@ -331,38 +331,57 @@ class Trajectory(object):
         if self.length == 0:
             print "Warning: Trajectory is empty";
             return
-        if imported['progressbar']:
-            pbar = ProgressBar(widgets=['Unwrapping PBCs...',Percentage()], maxval = self.length).start()
+        #if imported['progressbar']:
+        #    pbar = ProgressBar(widgets=['Unwrapping PBCs...',Percentage()], maxval = self.length).start()
 
-        self.dr = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
-        self.r = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
+        dr = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
+        r = np.zeros((self.length, self.num_atoms, 3), dtype='float64')
         if init_pos == None:
-            self.r[0] = self.positions[0]
+            r[0] = self.positions[0]
         else:
-            self.r[0] = init_pos
-        for stepno in range(1,self.length):
+            r[0] = init_pos
+        for stepno in range(1, self.length):
             dr = self.positions[stepno] - self.positions[stepno-1]
             c = np.abs(np.array((dr-1, dr, dr+1)))
             diff = np.array([[np.argmin(c[:,i,j]) for j in range(3)] for i in range(self.num_atoms)]) - 1  # (-1,0,1)
             dr += diff
-            self.dr[stepno] = dr
-            self.r[stepno] = self.r[stepno-1] + dr
+
+            r[stepno] = r[stepno-1] + dr
             if np.max(dr) > 1:
-                print "Warning: anomalously large displacement of %.1f between step %d and %d" % (dr,stepno,stepno-1)
+                print "Warning: anomalously large displacement of %.1f between step %d and %d" % (dr,stepno,stepno-1)           
 
-            # This may not be necessary...
-            drp = self.r[stepno] - self.positions[stepno]
-            drift = drp - np.round(drp)
-            if remove_drift:
-                self.r[stepno] -= drift
-            if abs(np.max(drift)) > 0.5:
-                print "Warning: Max drift is",np.max(drift),". This is very high, and may lead to erroneous behaviour of the PBC unwrapping."
+            # Remove numerical noise
+            if remove_numerical_noise:
+                # For very long runs, I feared that summation of all the small positinal differences 
+                # might not sum up exactly to the final positions due to inaccuracy in floating 
+                # point arithmetic, and wrote this piece of code. 
+                # However, it seems like my fear was quite unjustified. I've never noticed the noise
+                # to increase above 1e14.
+                drp = r[stepno] - self.positions[stepno]
+                noise = drp - np.round(drp)
+                r[stepno] -= noise
+                if abs(np.max(drift)) > 0.5:
+                    print "Warning: Max drift is",np.max(drift),". This is very high, and may lead to erroneous behaviour of the PBC unwrapping."
 
-            if imported['progressbar']:
-                pbar.update(stepno)
-        self.positions = self.r
-        if imported['progressbar']:
-            pbar.finish()
+            #if imported['progressbar']:
+            #    pbar.update(stepno)
+        self.positions = r
+        #if imported['progressbar']:
+        #    pbar.finish()
+
+
+    def remove_drift(self):
+        r = np.zeros((self.nsteps, self.num_atoms, 3), dtype='float64')
+        r[0] = self.positions[0]
+        drift = np.zeros((self.nsteps, 3), dtype='float64')
+        for stepno in range(1, self.length):
+            dr = self.positions[stepno] - self.positions[stepno-1]
+            drift[stepno] = np.sum(dr, axis = 0) / self.natoms
+            dr = dr - drift[stepno]
+            r[stepno] = r[stepno-1] + dr
+        self.positions = r
+        return drift
+
 
     def wrap_pbc(self):
         """
@@ -436,21 +455,21 @@ class Trajectory(object):
     #    return pos
 
 
-    def get_positions(self, coords = 'direct', atom_no = -1):
+    def get_positions(self, coords = 'direct', atom = -1):
         """
         Returns positions for one (atom_no>=0) or all (atom_no=-1) atoms 
         in direct or cartesian coordinates as a numpy array 
         of dimension (steps, atoms, 3).
         
         Parameters:
-            - coords    : either 'direct' or 'cartesian'
-            - atom_no   : (int) Set this to only return positions for a single atom.
+            - coords : either 'direct' or 'cartesian'
+            - atom   : (int) Set this to only return positions for a single atom.
         """
         
-        if atom_no == -1: 
+        if atom == -1: 
             p = self.positions.copy()
         else:
-            p = self.positions[:,atom_no,:].copy()
+            p = self.positions[:,atom,:].copy()
 
         if coords[0].lower() == 'd':
             return p

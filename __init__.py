@@ -176,7 +176,7 @@ def direct_to_cartesian(positions, basis):
 
         if np.allclose(basis[[0,0,1,1,2,2],[1,2,0,2,0,1]],np.zeros(6)):
             # orthorhombic
-            if np.allclose(s.diagonal()):
+            if np.allclose(basis.diagonal(),np.tile(basis[0,0],3)):
                 # cubic
                 pos = positions * basis[0,0]
             else:
