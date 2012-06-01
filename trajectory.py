@@ -491,6 +491,11 @@ class Trajectory(object):
         pos = self.get_positions(coords)
         return pos - pos[0]
 
+    def get_masses(self):
+        """
+        Returns array of atomic masses in atomic mass unit (amu)
+        """
+        return np.array([elements[i]['mass'] for i in self.atoms])  # amu
 
     def get_displacements_squared(self, coords = 'direct'):
         """
@@ -512,10 +517,11 @@ class Trajectory(object):
         Returns a (nsteps,natom,3) array
 
         Parameters:
-         - coords : 'direct' returns velocities in [direct coordinates]/[timestep]
-                        'cartesian' returns velocities in Å/s
+         - coords : 'direct' returns velocities in [direct coordinates]/fs
+                        'cartesian' returns velocities in Å/fs
         """
         timestep = self.time[1]-self.time[0]
+        #print timestep
         pos = self.get_positions(coords)
         vel = np.zeros(pos.shape)
 
@@ -523,7 +529,7 @@ class Trajectory(object):
         if algorithm == 'naive':
             for i in range(1,vel.shape[0]-1):
                 pbar.update(i)
-                vel[i] = (pos[i+1] - pos[i-1]) / 2.*timestep 
+                vel[i] = (pos[i+1] - pos[i-1]) / 2. / timestep 
         pbar.finish()
 
         return vel

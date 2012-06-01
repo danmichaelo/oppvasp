@@ -245,7 +245,13 @@ class Structure(object):
 
     #-------------- Methods for analyzing the structure -----------
 
-    def get_supercell_positions(self, sx, sy, sz, coords= 'cart'):
+    def get_mass(self):
+        mass = 0.
+        for at in self._atomtypes:
+            mass += elements[at]['mass']
+        return mass
+
+    def get_supercell_positions(self, sx, sy, sz, coords = 'cart'):
         """ Returns a (sx,sy,sz) supercell in the form of a (sx*sy*sz,3) numpy array """
         nat = self.get_num_atoms()
         sup = np.zeros((nat*sx*sy*sz,3))
@@ -265,39 +271,39 @@ class Structure(object):
         """ Returns a (sx,sy,sz) supercell in the form of a Structure object """
         nat = self.get_num_atoms()
         c = self._cell * [sx,sy,sz]
-        p = self.get_supercell_positions(sx,sy,sz,coords='cart')
+        p = self.get_supercell_positions(sx, sy, sz, coords = 'cart')
         t = np.zeros(p.shape[0])
         t0 = self.get_atomtypes()
         for i in range(sx*sy*sz):
-            print i*nat,i*nat+nat
+            #print i*nat,i*nat+nat
             t[i*nat:i*nat+nat] = t0
-        return Structure( cell = c, positions = p, atomtypes = t, coords='cart')
+        return Structure( cell = c, positions = p, atomtypes = t, coords = 'cart')
 
-    def get_nearest_neighbours(self, atom_no, tolerance = 0.1):
-        """ Returns a list of the nearest neighbours to atom atom_no """
-        nat = self.get_num_atoms()
+    #def get_nearest_neighbours(self, atom_no, tolerance = 0.1):
+    #    """ Returns a list of the nearest neighbours to atom atom_no """
+    #    nat = self.get_num_atoms()
         
-        # Make a 3x3x3 cell to ensure neighbours across 
-        # the unit cell boundary are counted as well.
-        sup = self.get_supercell_positions(3,3,3)
+    #    # Make a 3x3x3 cell to ensure neighbours across 
+    #    # the unit cell boundary are counted as well.
+    #    sup = self.get_supercell_positions(3, 3, 3)
         
-        # Positions of center cell:
-        cent = self._positions[atom_no] + np.dot(self.get_cell(),[1,1,1])
+    #    # Positions of center cell:
+    #    cent = self._positions[atom_no] + self.get_cell()
 
-        # Calculate all distances:
-        dist = np.sqrt(np.sum((sup-cent)**2,axis=1))
+    #    # Calculate all distances:
+    #    dist = np.sqrt(np.sum((sup-cent)**2,axis=1))
 
-        order = np.argsort(dist)
-        nearest_neighbours = [order[1]] 
-        d0 = dist[order[1]]
-        for n in order[2:]:
-            if (dist[n] - d0) > tolerance:
-                break
-            nearest_neighbours.append(n)
+    #    order = np.argsort(dist)
+    #    nearest_neighbours = [order[1]] 
+    #    d0 = dist[order[1]]
+    #    for n in order[2:]:
+    #        if (dist[n] - d0) > tolerance:
+    #            break
+    #        nearest_neighbours.append(n)
 
-        for n in nearest_neighbours:
-            # use mod to get atomic number in unit cell, not supercell
-            print n%nat,dist[n]
+    #    for n in nearest_neighbours:
+    #        # use mod to get atomic number in unit cell, not supercell
+    #        print n%nat,dist[n]
 
     def get_volume(self):
         """ Returns the volume in Angstrom^3 """
@@ -373,7 +379,7 @@ class Structure(object):
         la = 1 + int(2*rmax/wa)
         lb = 1 + int(2*rmax/wb)
         lc = 1 + int(2*rmax/wc)
-        print "dim:",la,lb,lc
+        #print "dim:",la,lb,lc
         #p2 = self.get_supercell_positions(la,lb,lc, coords='d')
 
         pos = np.zeros((natoms*la*lb*lc,3))
@@ -395,14 +401,18 @@ class Structure(object):
         pos[:,1] -= lb*(pos[:,1]*2/lb).astype('int')
         pos[:,2] -= lc*(pos[:,2]*2/lc).astype('int')
         
-        cart = direct_to_cartesian(pos,self._cell)
-        dr = np.sqrt(np.sum(cart**2,1))
+        cart = direct_to_cartesian(pos, self._cell)
+        dr = np.sqrt(np.sum(cart**2, axis = 1))
         cond = np.logical_and(dr < rmax, dr > 0.0)
 
         dr = dr[cond]
         pos = pos[cond]
         offsets = (2*pos).astype('int')
         indices = indices[cond]
+
+        if len(dr) == 0:
+            print u'No neighbours within %.2f Å' % rmax
+            return None
 
         # sort:
         so = np.argsort(dr)
