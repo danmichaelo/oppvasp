@@ -246,10 +246,28 @@ class Structure(object):
     #-------------- Methods for analyzing the structure -----------
 
     def get_mass(self):
+        """ 
+        Returnes the summed mass of the atoms in the structure in atomic mass units (u) ~ g/mol 
+            1u = 1.660538921e-24 g 
+        """
         mass = 0.
         for at in self._atomtypes:
             mass += elements[at]['mass']
         return mass
+    
+    def get_density(self):
+        """
+        Returns density in g/cm^3
+        """
+
+        # Mass: Convert from atomic mass units to grams using one twelfth the rest mass of 
+        # an unbound neutral atom of carbon-12 in its nuclear and electronic ground state;
+        m = self.get_mass() * 1.660538921  # e-24 grams
+
+        # Volume:
+        V = self.get_volume()  # Angstrom^3 = (e-8)^3 cm^3 = e^-24 cm^3
+
+        return m / V
 
     def get_supercell_positions(self, sx, sy, sz, coords = 'cart'):
         """ Returns a (sx,sy,sz) supercell in the form of a (sx*sy*sz,3) numpy array """
@@ -411,7 +429,9 @@ class Structure(object):
         indices = indices[cond]
 
         if len(dr) == 0:
-            print u'No neighbours within %.2f Å' % rmax
+            q = np.sqrt(np.sum(cart**2, axis = 1))
+            q = q[q>0.]
+            print u'No neighbours within %.2f Å. Nearest neighbour found at %.2f Å' % (rmax, np.sort(q)[0])
             return None
 
         # sort:

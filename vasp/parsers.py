@@ -98,7 +98,7 @@ class IterativeVasprunParser(object):
             print "Fatal error: The file '%s' was not found or is not a file." % (self.filename)
             sys.exit(1)
 
-        print_memory_usage()
+        #print_memory_usage()
         
         # read beginning of file to find number of ionic steps (NSW) and timestep (POTIM)
         self.params = self._find_first_instance('parameters', self._params_tag_found)
@@ -227,7 +227,7 @@ class IterativeVasprunParser(object):
         atoms = self.get_atoms()
         self.trajectory = Trajectory(num_steps = self.nsw, timestep = self.potim, atoms = atoms)
         self.step_no = 0
-        status_text = "Parsing %.2f MB... " % (os.path.getsize(self.filename)/1024.**2)
+        status_text = "Parsing %s (%.2f MB)... " % (self.filename, os.path.getsize(self.filename)/1024.**2)
         if imported['progressbar']:
             self.pbar = ProgressBar(widgets=[status_text,Percentage()], maxval = self.nsw+1).start()
         
@@ -260,10 +260,32 @@ class IterativeVasprunParser(object):
         return self.get_trajectory()
 
 
+    def ionic_steps(self, step = 0):
+
+        try:
+            parser
+        except:
+            parser = etree.XMLParser()
+            context = etree.iterparse(self.filename, tag='atominfo')
+            for event, elem in context:
+                atominfo = []
+                for rc in elem.xpath("array[@name='atoms']/set/rc"):
+                    atominfo.append(get_atomic_number_from_symbol(rc[0].text.strip()))
+                break  # avoid scanning the whole file!
+
+            context = etree.iterparse(self.filename, tag='calculation')
+        
+        for event, elem in context:
+            step = IonicStep(elem, atominfo)
+            elem.clear()
+            while elem.getprevious() is not None:
+                del elem.getparent()[0]
+            yield step
+
 class IonicStep(object):
 
     def __init__(self, node, atoms):
-        self._node = node
+        self._node = copy(node)
         self._atoms = atoms
     
     def get_node():

@@ -4,6 +4,7 @@
 import os,sys
 import numpy as np
 #import scipy as sp
+from copy import copy
 
 import tables
 
@@ -37,9 +38,21 @@ class Trajectory(object):
     or exported to the vtf format for use with the VMD viewer.
 
     The class provides some simple manipulation methods.
+
+        pass either:
+        - filename:  a pytables h5table file
+        or:
+        - num_steps:
+        - timestep:
+        - atoms:
     """
 
     def __init__(self, filename = '', num_steps = 0, timestep = 1., atoms = []):
+        self.filename = filename
+        self.path = ''
+        self.pbc_unwrapped = False
+        if filename != '':
+            self.path = os.path.abspath(filename)
         if filename != '':
             self.load(filename)
         else:
@@ -54,7 +67,7 @@ class Trajectory(object):
             self._positions = np.zeros((num_steps, self.num_atoms, 3))
             self._forces = np.zeros((num_steps, self.num_atoms, 3))
             self.set_timestep(timestep)
-            print "Allocated %.2f MB for Trajectory object" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
+            #print "Allocated %.2f MB for Trajectory object" % ((self._time.nbytes + self.total_energy.nbytes + self.kinetic_energy.nbytes + self._positions.nbytes + self._forces.nbytes)/(1024.**2))
         # Set default selection to the whole trajectory:
 
     def update_length(self, new_length):
@@ -67,6 +80,9 @@ class Trajectory(object):
             self.basis = self.basis[0:new_length]
             self._positions = self._positions[0:new_length]
             self._forces = self._forces[0:new_length]
+
+    def get_copy(self):
+        return self.get_selection()
 
     def get_selection(self, start = 0, stop = 0, step = 1):
         """
@@ -100,8 +116,8 @@ class Trajectory(object):
         p = self._positions[start:stop:step]
         nsteps = p.shape[0]
         t = Trajectory( num_steps = nsteps, atoms = self.atoms ) 
-        t.set_timestep(self.time[1]-self.time[0])
-        t.positions = p
+        t.set_timestep((self.time[1]-self.time[0])*step)
+        t.positions = copy(p)
         t.forces = self._forces[start:stop:step]
         t.basis = self.basis[start:stop:step]
         t.total_energy = self.total_energy[start:stop:step]
@@ -151,6 +167,11 @@ class Trajectory(object):
     def time(self,val):
         self._time = val
 
+    @property
+    def timestep(self):
+        """assumes linear time"""
+        return self._time[1] - self._time[0]
+
     def set_timestep(self, timestep):
         self._time = np.arange(self.length) * timestep
 
@@ -175,6 +196,7 @@ class Trajectory(object):
     def forces(self):
         """
         nsteps x natoms x 3 array containing the forces on all atoms for all steps
+        in eV/Angstrom
         """
         return self._forces
 
@@ -231,10 +253,12 @@ class Trajectory(object):
         else:
             print " Total: %.2f MB" % (6*b1 + b2)
         
-
+        self.filename = filename
+        self.path = os.path.abspath(filename)
         ext = os.path.splitext(filename)[1]
         if ext == '.h5':
             h5file = tables.openFile(filename, mode='w', title='Oppvasp Trajectory File')
+            h5file.createArray(h5file.root, 'metadata', [['path', self.path], ['pbc_unwrapped', '1' if self.pbc_unwrapped else '0']])
             h5file.createArray(h5file.root, 'basis', self.basis)
             h5file.createArray(h5file.root, 'positions', self._positions)
             if save_forces:
@@ -264,19 +288,51 @@ class Trajectory(object):
         """ Reads trajectory from a hdf5 binary file using PyTables or a Numpy npz file"""
 
         ext = os.path.splitext(filename)[1]
+        has_forces = 'no'
+        has_metadata = 'no'
         if ext == '.h5':
-            h5file = tables.openFile(filename, mode='r')
-            self._time = h5file.getNode(h5file.root, 'time').read()
-            self.atoms = h5file.getNode(h5file.root, 'atoms').read()
-            self.basis = h5file.getNode(h5file.root, 'basis').read()
-            self.total_energy = h5file.getNode(h5file.root, 'etot').read()
-            self.kinetic_energy = h5file.getNode(h5file.root, 'ekin').read()
-            self._positions = h5file.getNode(h5file.root, 'positions').read()
+            tbl = tables.openFile(filename, mode='a')
+            self._time = tbl.getNode(tbl.root, 'time').read()
+            self.atoms = tbl.getNode(tbl.root, 'atoms').read()
+            self.basis = tbl.getNode(tbl.root, 'basis').read()
+            self.total_energy = tbl.getNode(tbl.root, 'etot').read()
+            self.kinetic_energy = tbl.getNode(tbl.root, 'ekin').read()
+            self._positions = tbl.getNode(tbl.root, 'positions').read()
             try:
-                self._forces = h5file.getNode(h5file.root, 'forces').read()
+                options = tbl.getNode(tbl.root, 'metadata').read()
+                for key, val in options:
+                    if key == 'pbc_unwrapped':
+                        self.pbc_unwrapped = (val == '1')
+                    elif key == 'path':
+                        self.path = val
+                        if not os.path.isfile(self.path):
+                            print "Warning: Original vasprun.xml file not found at %s" % self.path
+                            # check if file is in current directory
+                            b = os.path.basename(self.path)
+                            a = os.path.abspath(b)
+                            if os.path.isfile(a):
+                                print 'File found at %s. Would you like to update the trajectory file? [y/n]' % a
+                                if raw_input()[0].lower() == 'y':
+                                    for row in tbl:
+                                        if row[0] == 'path':
+                                            row[1] = a
+                                            self.path = a
+                                            row.update()
+                                            print "Ok, saved new path: %s" % a
+                                            break
+
+                            # check if file is in current directory
+                has_metadata = 'yes'
             except tables.NoSuchNodeError:
-                print "This file does not contain forces"
+                pass
+                #print "File does not contain metadata"
+            try:
+                self._forces = tbl.getNode(tbl.root, 'forces').read()
+                has_forces = 'yes'
+            except tables.NoSuchNodeError:
+                #print "This file does not contain forces"
                 self._forces = np.zeros(self._positions.shape) # waste of memory
+            tbl.close()
         elif ext == '.npz':
             npz = np.load(filename)
             self._time = npz['time']
@@ -294,7 +350,7 @@ class Trajectory(object):
         else:
             raise StandardError("Unknown file extension!")
 
-        print "Read trajectory (%d atoms, %d steps) from %s" % (self.num_atoms, self.length, filename)
+        print "Read trajectory (%d atoms, %d steps, forces: %s, metadata: %s) from %s" % (self.num_atoms, self.length, has_forces, has_metadata, filename)
 
     def unwrap_pbc(self, remove_numerical_noise = False, init_pos = None):
         """ 
@@ -368,6 +424,7 @@ class Trajectory(object):
         self.positions = r
         #if imported['progressbar']:
         #    pbar.finish()
+        self.pbc_unwrapped = True
 
 
     def remove_drift(self):
@@ -388,7 +445,9 @@ class Trajectory(object):
         Wraps coordinates outside the unit cell into it
         """
         # Minimum image convention (may not be appropriate for extreme cell geometries!!)
-        self.positions = self.positions - (2*self.positions-1).astype(np.int)
+        #self.positions = self.positions - (2*self.positions-1).astype(np.int) # works only in the range <-0.5, 1.5>
+        self.positions = self.positions - np.floor(self.positions) # works in any range
+        self.pbc_unwrapped = False
 
 
     def get_snapshot(self, frame):
@@ -483,8 +542,8 @@ class Trajectory(object):
         """
         raise DeprecationWarning("get_coordinates is deprecated. Use get_positions instead")
         return self.get_positions(coords)
-    
-    def get_displacements(self, coords = 'direct'):
+   
+    def get_displacements(self, coords = 'cart'):
         """
         Returns the displacements $r(t)-r(0)$ as a numpy array of shape (#steps, #atoms, 3)
         """
