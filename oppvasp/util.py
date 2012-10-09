@@ -7,6 +7,106 @@ try:
 except:
     print "Warning: lxml python package not found"
 
+def direct_to_cartesian(positions, basis):
+    """
+    Converts positions in direct coordinates into cartesian coordinates using a given basis.
+
+    Parameters
+    ----------
+    positions : num_steps x num_atoms x 3 numpy array
+        Array containing the direct coordinates of num_atoms atoms for num_steps steps
+    basis : num_steps x 3 x 3 numpy array
+        Array containg the lattice vectors in Cartesian coordinates
+
+    """
+    if positions == None:
+        return None
+    #print "converting to cartesian basis..."
+    t1 = time.clock()
+    
+    # Alternative 1
+    #pos = np.array([np.dot(p,b) for p,b in zip(positions, basis)]) # there is surely some faster way!
+
+    if basis.ndim == 3:
+        # time-dependent basis
+    
+        # Alternative 2 is about 10 times faster than alternative 1
+        pos = np.zeros(positions.shape)
+        if pos.ndim == 2 or pos.ndim == 3:
+            i = 0
+            for p,b in zip(positions,basis):
+                pos[i] = np.dot(p,b)
+                i += 1
+        #elif pos.ndim == 2:
+            # single coordinate set
+            # for some reason, this is really slow:
+            #   pos = np.dot(positions, basis)
+
+        else:
+            raise StandardError("positions is of wrong dimensions")
+    
+    else:
+
+        if np.allclose(basis[[0,0,1,1,2,2],[1,2,0,2,0,1]],np.zeros(6)):
+            # orthorhombic
+            if np.allclose(basis.diagonal(),np.tile(basis[0,0],3)):
+                # cubic
+                pos = positions * basis[0,0]
+            else:
+                print "not supported yet"
+        else:
+            print "not supported yet"
+
+    
+    # Alternative 3: if the cell is static (3 x 3 instead of nsteps x 3 x 3):
+    # perhaps we can use tensordot anyway? I'm not sure.
+    #pos = np.tensordot(positions, basis, axes=([2],[0]))
+    
+    tdiff = time.clock() - t1
+    if tdiff > 1:
+        print "Conversion to cartesian basis took",round(tdiff, 3),"seconds. This function should be optimized!"
+    # We could make a Fortran module doing the conversion... 
+    #for i in range(pos.shape[0]): # axis 0   : 4 
+    #    pos3[i] = np.dot(pos[i],basis[i])
+    #    for j in range(pos.shape[1]): # axis 1 : 5
+    #        #pos2[i,j] = np.dot(pos[i,j],basis[i,j])
+    #        for k in range(pos.shape[2]): # axis 2 : 3
+    #            for l in range(pos.shape[2]): # axis 2 : 3
+    #                pos2[i,j,k] += pos[i,j,l] * basis[i,l,k]
+    return pos
+
+
+def cartesian_to_direct(positions, basis):
+    """
+    Converts positions in cartesian coordinates into direct coordinates using a given basis.
+
+    Parameters
+    ----------
+    positions : num_steps x num_atoms x 3 numpy array
+        Array containing the cartesian coordinates of num_atoms atoms for num_steps steps
+    basis : num_steps x 3 x 3 numpy array
+        Array containg the lattice vectors in Cartesian coordinates
+
+    """
+    if positions == None:
+        return None
+    pos = np.zeros(positions.shape)
+    i = 0
+    inv_basis = np.linalg.inv(basis)
+    
+    if pos.ndim == 3:
+        # trajectory
+        for p,b in zip(positions, inv_basis):
+            pos[i] = np.dot(p,b)
+            i += 1
+    elif pos.ndim == 2:
+        # single coordinate set
+        pos = np.dot(positions, inv_basis)
+    else:
+        raise StandardError("positions is of wrong dimensions")
+
+    return pos
+
 def get_pairs(n, indices = None, include_self = False):
     """
         Returns a list of all n*(n-1)/2 unordered pairs of numbers 0...n-1
@@ -199,20 +299,4 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "\
                              "(or 'y' or 'n').\n")
-
-def OpenVaspRunXml():
-    filename = 'vasprun.xml'
-    if len(sys.argv) > 0:
-        filename = sys.argv[0]
-    filename = 'vasprun.xml'
-    if not os.path.isfile(filename):
-        print "\nERROR: File '%s' was not found!\n" % (filename)
-    fsize = float(os.path.getsize(filename))/1024**2
-    sys.stdout.write("Parsing %s (%.1f MB) using libxml... " % (filename, fsize))
-    if fsize > 100:
-        sys.stdout.write("\nThis may take some time... ")
-    sys.stdout.flush()
-    doc = etree.fromstring(open(filename,'r').read())
-    sys.stdout.write("done!\n")
-    return doc, filename
 
