@@ -1,5 +1,7 @@
+import sys
+import os
+import time
 
-import sys, os
 import numpy as np
 
 try:
