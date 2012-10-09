@@ -11,6 +11,7 @@ import time
 
 # INCOMPLETE TABLE!
 # vdw is van der Waals radius
+# masses in g/mol
 elements = {
   1 : { 'mass' : 1.0079,  'name': 'Hydrogen',   'symb': 'H',  'vdw': 1.20 },
   2 : { 'mass' : 4.0026,  'name': 'Helium',     'symb': 'He', 'vdw': 1.40 }, 
@@ -170,7 +171,7 @@ def direct_to_cartesian(positions, basis):
             #   pos = np.dot(positions, basis)
 
         else:
-            raise GeneralError("positions is of wrong dimensions")
+            raise StandardError("positions is of wrong dimensions")
     
     else:
 
@@ -230,6 +231,6 @@ def cartesian_to_direct(positions, basis):
         # single coordinate set
         pos = np.dot(positions, inv_basis)
     else:
-        raise GeneralError("positions is of wrong dimensions")
+        raise StandardError("positions is of wrong dimensions")
 
     return pos

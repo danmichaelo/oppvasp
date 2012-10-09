@@ -6,7 +6,6 @@ import numpy as np
 
 import os,copy,sys
 from copy import copy
-from scipy.optimize import leastsq
 
 from oppvasp.vasp.parsers import IterativeVasprunParser, PoscarParser
 
@@ -105,7 +104,7 @@ def get_minmax(sets):
             ma = ma0
     return mi,ma
 
-def symmetric_running_mean(data, n, edgehandling = 'asymmetric'):
+def symmetric_running_mean(data, n, edgehandling = 'mirror'):
     """
     Calculates a symmetric running mean over the first axis (typically the time axis) 
     in a dataset 'data', in order to smooth out short-term fluctuations and highlight 
@@ -117,7 +116,15 @@ def symmetric_running_mean(data, n, edgehandling = 'asymmetric'):
     No true running mean therefore exists for the first n steps and the last n steps. 
     In these ranges
 
-    edgehandling : either 'symmetric' or 'asymmetric'
+    edgehandling : either 'symmetric' or 'asymmetric' or 'mirror'
+        - symmetric: smoothing window decreases gradually to zero. Makes the initial and 
+          final positions correct, but unsmoothed.
+        - asymmetric: smoothing windows decrases only on one side, until reaching n/2. 
+          Better smoothing, but initial and final positions will be off.
+        - mirroring about the edge. The current implementation mirrors about x = 0, y = 0 and x = x[-1]
+          This preserves the initial position, but not the final position. 
+          A line to mirror about y = y[-1] has been commented out, since it made the smoothing very
+          sensitive to what happened to be the final value
 
     >>> data = np.ones((100,3)) * 5 * np.random.rand(100,3)
     >>> data[:,0] += np.arange(100)*.5
@@ -136,18 +143,32 @@ def symmetric_running_mean(data, n, edgehandling = 'asymmetric'):
             if edgehandling == 'symmetric':
                 # symmetric mean makes the initial position correct, but results in large initial fluctuations
                 current_avg = np.mean(data[0:1+2*i],axis=0) 
-            else:
+            elif edgehandling == 'asymmetric':
                 # asymmetric mean is more stable, but the initial position will be off
                 current_avg = np.mean(data[0:i+n], axis=0)
+            elif edgehandling == 'mirror':
+                # mirrors the first i+n frames about x = 0, giving correct initial positions and smoothing
+                q = np.concatenate([data[0]-(data[n-i:0:-1]-data[0]), data[0:i+n+1]])
+                #print i, "sample size:",len(q)
+                current_avg = np.mean(q, axis=0)
         elif i >= data.shape[0]-n: # no symmetric average exists for the last n values
             # decrease sample size gradually
             r = 2*(data.shape[0]-i)
             if edgehandling == 'symmetric':
                 # symmetric mean, decrease size of subset gradually until reaching 1
                 current_avg = np.mean(data[-r:],axis=0) 
-            else:
-                # asymmetric mean, decrease size of subset gradually until reaching ''n''+1
-                current_avg = np.mean(data[i-1-n:],axis=0) 
+            elif edgehandling == 'asymmetric':
+                # asymmetric mean, decrease size of subset gradually from 2n+1 to n+1
+                current_avg = np.mean(data[i-n:], axis=0) 
+            elif edgehandling == 'mirror':
+                # mirror about x = mean(data[-n:] to keep subsetsize at 2n+1
+                L = data.shape[0]
+                # edgehandling = 'extrapolate'?:
+                #q = np.concatenate([data[i-n:], 2*data[-n:].mean()-data[-2:L-i-3-n:-1]])
+                q = np.concatenate([data[i-n:], data[-2:L-i-3-n:-1]])
+                #print i, "sample size:",len(q)
+                current_avg = np.mean(q, axis = 0)
+
         else:
             current_avg = current_avg - data[i-1-n]/(2*n+1) + data[i+n]/(2*n+1) # update symmetric running mean
         running_avg[i] = current_avg
@@ -175,153 +196,4 @@ def symmetric_running_median(data, n):
             current_avg = np.median(data[i-1-n:i+n], axis=0) # update symmetric running median 
         running_avg[i] = current_avg
     return running_avg
-
-
-
-class DisplacementPlot(object):
-    """
-    The DisplacementPlot class is a simple script for making 
-    some quick plots from MD trajectories.
-    """
-
-    def __init__(self, trajectories):
-        """
-        Construct a DisplacementPlot object.
-
-        Parameters
-        ----------
-        trajectories : Trajectory or array
-            Either a single Trajectory object or a list of such objects.
-        
-        Examples
-        ----------
-        >>> import os
-        >>> from oppvasp.trajectory import Trajectory
-        >>> from oppvasp.vasp.parsers import PoscarParser, IterativeVasprunParser
-        >>>
-        >>> if os.path.isfile('trajectory_unwrapped.npz'):
-        >>>     traj = Trajectory('trajectory.npz')
-        >>> else:
-        >>>     traj = IterativeVasprunParser('vasprun.xml').get_trajectory()
-        >>>     traj.unwrap_pbc( init_pos = PoscarParser('POSCAR').get_positions(coords='d') )
-        >>>     traj.save('trajectory_unwrapped.npz')
-        >>>
-        >>> # To only plot the part from step 10000 to step 20000:
-        >>> traj.set_selection(10000, 20000)
-        >>> 
-        >>> dp = DisplacementPlot(traj)
-        >>> dp.add_plot( what = 'r2', smoothen = True, 
-        >>>     style = { 'color' : 'black' } ) # avg r^2 for all atoms 
-        >>> dp.add_plot( what = 'r2', atom_no = 0, smoothen = True, linear_fit = True)
-        >>> dp.add_plot( what = 'r2', atom_no = 0, smoothen = False, 
-        >>>     style = { 'zorder' : -1, 'alpha': 0.4, 'color': 'gray' } )
-
-        """
-        if not 'pop' in dir(trajectories):
-            trajectories = [trajectories]
-        for traj in trajectories:
-            traj.r2 = traj.get_displacements_squared( coords = 'cartesian' )  # displacement r^2
-            traj.avg_r2 = np.sum(traj.r2, axis=1) / traj.num_atoms       # displacement r^2 averaged over all atoms
-        self.trajs = trajectories
-        
-        prepare_canvas('10 cm') 
-        p = [0.15, 0.15, 0.05, 0.05]  # margins: left, bottom, right, top. Height: 1-.15-.46 = .39
-
-
-        import matplotlib.pyplot as plt
-        self.fig = plt.figure()
-        self.ax1 = self.fig.add_axes([ p[0], p[1], 1-p[2]-p[0], 1-p[3]-p[1] ])
-        self.ax1.grid(True, which='major', color = 'gray', alpha = 0.5)
-        self.ax1.set_xlabel(r'Time [ps]')
-        self.plotdata = []
-    
-    def get_diffusion_coeff(self, atoms):
-        """ 
-        Returns the diffusion coefficient for a set of atoms in cm^2/s. 
-
-        Parameters
-        ----------
-        atoms : list
-            The atoms to calculate the diffusion coefficient for. 
-            The atoms should be of the same type.
-        """
-        for traj in self.trajs:
-            # to convert from Å^2/fs to cm^2/s: Å^2/fs * (1e-8 cm/Å)^2 * 1e15 s/fs = 0.1 cm^2/s
-            # divide by 6 in 3 dimensions:
-            fac = 0.1 * 1./6
-            D = np.zeros(traj.r2.shape[0])
-            # note: at first it seems more intelligible to just use traj.r2[1:atoms] since 
-            # NumPy allows such a splicing.
-            # but for some reason this completely hangs the computer. Perhaps a bug in NumPy.
-            for atno in atoms:
-                D[1:] += traj.r2[1:,atno] / traj.time[1:] 
-            traj.D = D * fac / len(atoms)
-        return [traj.D for traj in self.trajs]
-
-
-    def add_plot(self, traj_no = 0, atom_no = -1, what = 'r2', smoothen = False, style = { 'color': 'black' }, 
-            linear_fit = False):
-        """
-        Adds a plot for the property 'what' for atom 'atom_no' or an average for all the atoms if 'atom_no = -1.
-        'what' can take the following values:
-             'r' : displacement plot
-            'r2' : square displacement plot 
-        """
-        if not 'ax1' in dir(self):
-            self.prepare_plot()
-        traj = self.trajs[traj_no]
-        x = traj.time[:]/1.e3
-        if what == 'r2' or what == 'r':
-            self.ax1.set_ylabel(ur'$\Delta r^2$ [Å$^2$]')
-            if atom_no == -1:
-                y = traj.avg_r2[:]
-            else:
-                y = traj.r2[:, atom_no]
-            if what == 'r':
-                y = np.sqrt(y)
-                self.ax1.set_ylabel(ur'$\Delta r$ [Å]')
-        elif what == 'x' or what == 'y' or what == 'z':
-            r = traj.get_displacements( coords = 'cartesian' )  # displacement vectors
-            if atom_no == -1:
-                raise ValueError("averaging not implemented")
-            else:
-                if what == 'x':
-                    y = r[:, atom_no, 0]
-                    self.ax1.set_ylabel(ur'$\Delta x$ [Å]')
-                elif what == 'y':
-                    y = r[:, atom_no, 1]
-                    self.ax1.set_ylabel(ur'$\Delta y$ [Å]')
-                elif what == 'z':
-                    y = r[:, atom_no, 2]
-                    self.ax1.set_ylabel(ur'$\Delta z$ [Å]')
-        elif what == 'D':
-            D = self.get_diffusion_coeff([atom_no])
-            y = D[0]
-            self.ax1.set_ylabel(ur'$D$ [cm$^2$/s]')
-        
-        if not x.shape == y.shape:
-            raise ValueError("Uh oh, shape of x,",x.shape,", does not match shape of y,",y.shape) 
-
-        if smoothen:
-            #y = symmetric_running_mean(y, 250)
-            y = symmetric_running_mean(y, 500)
-            #y = symmetric_running_median(y, 1000)
-        self.ax1.plot(x,y, **style)
-        self.ax1.set_xlim(x[0],x[-1])
-        self.plotdata.append( { 'x': x, 'y': y } )
-
-        if linear_fit:
-            fitfunc = lambda p, x: p[0] + p[1]*x  # Target function 
-            errfunc = lambda p, x, y: fitfunc(p, x) - y # Distance to the target function
-            p0 = [0,np.max(y)/np.max(x)] # Initial guess for the parameters
-            p1, success = leastsq(errfunc, p0[:], args=(x,y))
-            print p1
-            self.ax1.plot(x, fitfunc(p1, traj.time/1.e3), color = 'red' )
-
-    def save_plot(self, filename = 'displacement.pdf'):
-        sys.stdout.write("Writing %s... " % os.path.basename(filename))
-        sys.stdout.flush()
-        plt.savefig(filename)
-        sys.stdout.write("done!\n")
-
 
