@@ -11,5 +11,5 @@ import numpy as np
 
 from element_data import elements, get_atomic_number_from_symbol
 from util import direct_to_cartesian, cartesian_to_direct
-from read_trajectory import read_trajectory
+from vasp.read_trajectory import read_trajectory
 
